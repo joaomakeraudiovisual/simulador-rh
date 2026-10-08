@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plataforma Maker — Simulação de RH</title>
+<style>
+  :root {
+    color-scheme: light;
+    --accent: #b85d19;
+    --accent-text: #96470c;
+    --bg: #f2f3f5;
+    --surface: #ffffff;
+    --sidebar: #1b2128;
+    --sidebar-text: #c7cbd1;
+    --sidebar-hover: #262e38;
+    --border: #d5d8dc;
+    --text: #22262a;
+    --muted: #5f6670;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --header-h: 42px;
+    --subbar-h: 36px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-size: 13px; line-height: 1.4; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; }
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .print-only { display: none; }
+
+  /* ---------- Estrutura ---------- */
+  .erp { display: flex; min-height: 100vh; flex-direction: column; }
+  .topbar {
+    min-height: var(--header-h); background: #14181d; color: #eaedf0;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 6px; padding: 4px 14px; border-bottom: 1px solid #0a0c0e;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; letter-spacing: .3px; }
+  .brand i { color: #f59e0b; font-style: normal; }
+  .brand-sub { font-size: 10px; background: #262e38; color: #a4abb5; padding: 2px 6px; text-transform: uppercase; font-weight: 600; }
+  .top-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .top-company { font-size: 11px; color: #9ca3af; margin-right: 8px; }
+  .top-company strong { color: #fff; }
+
+  .body { display: flex; flex: 1; }
+  .sidebar { width: 230px; background: var(--sidebar); color: var(--sidebar-text); display: flex; flex-direction: column; flex-shrink: 0; }
+  .chip { padding: 10px 14px; border-bottom: 1px solid #2f3844; background: #161b21; }
+  .chip-label { font-size: 10px; text-transform: uppercase; color: #868e96; font-weight: 600; }
+  .chip-name { font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav { list-style: none; margin: 0; padding: 6px 0; flex: 1; }
+  .nav button {
+    width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px 14px; background: none; border: 0;
+    border-left: 3px solid transparent; color: var(--sidebar-text); font-size: 12px; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .nav button:hover { background: var(--sidebar-hover); color: #fff; }
+  .nav button.active { background: #242c36; color: #fff; border-left-color: var(--accent); font-weight: 600; }
+  .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .nav-ico { width: 14px; text-align: center; opacity: .85; font-size: 11px; }
+  .side-foot { padding: 10px 14px; font-size: 10.5px; color: #6b7280; border-top: 1px solid #11151a; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .subbar {
+    min-height: var(--subbar-h); background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; padding: 4px 16px;
+  }
+  .crumb { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .crumb strong { color: var(--text); }
+  .subbar-actions { display: flex; gap: 6px; }
+  .content { padding: 16px; flex: 1; }
+  .foot {
+    padding: 10px 16px; background: #e9ebed; border-top: 1px solid var(--border); font-size: 11px; color: #555d67;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
+  }
+
+  /* ---------- Botões ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 11px; font-weight: 600;
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 2px; background: #fff; color: var(--text);
+    cursor: pointer; line-height: 1; white-space: nowrap;
+  }
+  .btn:hover { background: #f4f5f7; border-color: #bcc1c8; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .btn-primary { background: var(--accent); border-color: #9c4c0f; color: #fff; }
+  .btn-primary:hover { background: #a55212; border-color: #833e0a; }
+  .btn-danger { color: #b91c1c; border-color: #fca5a5; }
+  .btn-danger:hover { background: #fef2f2; border-color: #ef4444; }
+  .btn-danger.solid { background: #b91c1c; border-color: #991b1b; color: #fff; }
+  .btn-danger.solid:hover { background: #991b1b; }
+  .btn-sm { padding: 4px 7px; font-size: 10.5px; }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+  /* ---------- Tabelas ---------- */
+  .table-card { background: #fff; border: 1px solid var(--border); overflow: hidden; }
+  .toolbar {
+    padding: 8px 12px; background: #fafbfc; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .toolbar-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .toolbar-title { font-weight: 700; font-size: 12px; text-transform: uppercase; }
+  .table-scroll { overflow-x: auto; }
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+  .tbl th {
+    background: #ebedf0; color: #374151; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+    padding: 7px 10px; border-bottom: 1px solid var(--border); border-right: 1px solid #e1e4e8; white-space: nowrap;
+  }
+  .tbl td { padding: 6px 10px; border-bottom: 1px solid #edf0f2; border-right: 1px solid #f2f4f6; vertical-align: middle; height: 32px; }
+  .tbl th:last-child, .tbl td:last-child { border-right: 0; }
+  .tbl tbody tr:nth-child(even) td { background: #fafbfc; }
+  .tbl tbody tr:hover td { background: #f0f4f8; }
+  .tbl .num { text-align: right; }
+  .tbl .ctr { text-align: center; }
+  .tbl .acts { text-align: right; white-space: nowrap; }
+  .tbl .acts .btn + .btn { margin-left: 4px; }
+  .empty { text-align: center; padding: 20px !important; color: var(--muted); }
+
+  /* ---------- Formulários ---------- */
+  .inp, .sel, .txt {
+    font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 2px; background: #fff; color: var(--text);
+    font-family: inherit; max-width: 100%;
+  }
+  .inp:focus, .sel:focus, .txt:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .w100 { width: 100%; }
+  .txt { resize: vertical; }
+  .fg { margin-bottom: 10px; }
+  .fl { display: block; font-size: 11px; font-weight: 600; margin-bottom: 3px; color: #495057; text-transform: uppercase; letter-spacing: .3px; }
+  .hint { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .row { display: grid; gap: 10px; }
+  .row.c2 { grid-template-columns: 1fr 1fr; }
+  .row.c3 { grid-template-columns: 1fr 1fr 1fr; }
+  .row.c4 { grid-template-columns: repeat(4, 1fr); }
+  .row.c5 { grid-template-columns: repeat(5, 1fr); }
+  .row.w21 { grid-template-columns: 2fr 1fr; }
+  .row.w211 { grid-template-columns: 2fr 1fr 1fr; }
+  .avg-preview { margin-top: 8px; font-size: 12px; }
+
+  /* ---------- Cards ---------- */
+  .card { background: #fff; border: 1px solid var(--border); padding: 14px; margin-bottom: 14px; }
+  .card-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin: 0 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border); color: #1e2329; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+  .grid-eq { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-an { display: grid; grid-template-columns: 240px 1fr; gap: 14px; }
+  .grid-pol { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .kpi { background: #fff; border: 1px solid var(--border); padding: 10px 12px; border-left: 3px solid #6b7280; }
+  .kpi.accent { border-left-color: var(--accent); }
+  .kpi-label { font-size: 10px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .kpi-val { font-size: 22px; font-weight: 700; color: #1b2128; line-height: 1.2; margin-top: 2px; }
+  .kpi-val small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .kv { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .kv td { padding: 4px 0; vertical-align: top; }
+  .kv td:first-child { color: var(--muted); width: 130px; }
+  .quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .quick .btn { padding: 10px 6px; }
+
+  .didactic { background: #fdfaf6; border: 1px solid #f0d9c4; border-left: 3px solid var(--accent); padding: 8px 12px; margin-bottom: 12px; font-size: 11.5px; color: #4a3a2a; }
+  .didactic-head {
+    width: 100%; background: none; border: 0; padding: 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: .4px; color: inherit; text-align: left;
+  }
+  .didactic-body { margin-top: 6px; line-height: 1.5; }
+  .didactic.collapsed .didactic-body { display: none; }
+
+  .tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 6px; text-transform: uppercase; letter-spacing: .3px; border: 1px solid #d1d5db; background: #f3f4f6; color: #374151; border-radius: 2px; }
+  .tag-green { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+  .tag-blue { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+  .tag-amber { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+  .tag-red { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+  .notice { font-size: 11px; background: #f8fafc; border: 1px solid #cbd5e1; padding: 7px 10px; color: #475569; margin-top: 10px; line-height: 1.45; }
+  .notice.warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+  .notice.danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+  .cargo-list { list-style: none; margin: 0; padding: 4px 0; }
+  .cargo-list li { border-bottom: 1px solid #f0f2f4; }
+  .cargo-list button {
+    width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 10px; background: none; border: 0;
+    font-size: 11.5px; text-align: left; cursor: pointer; color: inherit;
+  }
+  .cargo-list button:hover { background: #f4f6f8; }
+  .cargo-list button.sel { color: var(--accent-text); font-weight: 700; background: #fdf6ee; }
+  .pol-body { font-size: 11.5px; color: #374151; line-height: 1.5; white-space: pre-line; max-height: 160px; overflow-y: auto; padding-right: 4px; }
+
+  /* ---------- Seleção de empresa ---------- */
+  .select-screen { min-height: 100vh; background: #0f1318; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .select-card { background: #fff; width: 100%; max-width: 700px; border: 1px solid #2d3748; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .select-head { background: #181f28; padding: 16px 20px; border-bottom: 2px solid var(--accent); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .select-body { padding: 18px 20px; }
+  .company-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); background: #fafbfc; margin-bottom: 8px; }
+  .company-row:hover { background: #f1f4f8; }
+  .company-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+  .dashed { padding: 24px; text-align: center; border: 1px dashed var(--border); background: #fafafa; font-size: 12px; color: var(--muted); }
+
+  /* ---------- Modais ---------- */
+  .overlay { position: fixed; inset: 0; background: rgba(16,21,28,.65); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .modal { background: #fff; width: 100%; max-width: 580px; max-height: 92vh; display: flex; flex-direction: column; border: 1px solid #9aa0a6; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+  .modal.lg { max-width: 760px; }
+  .modal.sm { max-width: 400px; }
+  .modal-head { background: #1b2128; color: #fff; padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; margin: 0; }
+  .modal-x { background: transparent; border: 0; color: #9ca3af; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; }
+  .modal-x:hover { color: #fff; }
+  .modal-body { padding: 14px; overflow-y: auto; flex: 1; }
+  .modal-foot { background: #f7f8f9; padding: 8px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 6px; }
+  .modal form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+  #toast-root { position: fixed; right: 16px; bottom: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+  .toast { background: #1b2128; color: #fff; padding: 10px 14px; font-size: 12px; border-left: 3px solid #10b981; box-shadow: 0 4px 12px rgba(0,0,0,.3); border-radius: 2px; }
+  .toast.err { border-left-color: #ef4444; }
+
+  /* ---------- Responsivo ---------- */
+  @media (max-width: 900px) {
+    .body { flex-direction: column; }
+    .sidebar { width: 100%; }
+    .nav { display: flex; flex-wrap: wrap; }
+    .nav li { flex: 1 1 50%; }
+    .grid-2, .grid-eq, .grid-an { grid-template-columns: 1fr; }
+    .row.c3, .row.c4, .row.w21, .row.w211 { grid-template-columns: 1fr 1fr; }
+    .row.c5 { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 520px) {
+    .row.c2, .row.c3, .row.c4, .row.w21, .row.w211 { grid-template-columns: 1fr; }
+    .row.c5 { grid-template-columns: 1fr 1fr; }
+    .content { padding: 10px; }
+  }
+
+  /* ---------- Impressão ---------- */
+  @media print {
+    .topbar, .sidebar, .subbar-actions, #modal-root, #toast-root, .btn, .toolbar, .didactic, .foot { display: none !important; }
+    html, body, .main { background: #fff !important; color: #000 !important; }
+    .print-only { display: block; font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+    .card, .table-card, .kpi { border: 1px solid #000 !important; break-inside: avoid; }
+    .content { padding: 0; }
+    .table-scroll { overflow: visible; }
+  }
+
+  /* ---------- Fotos, tabela salarial e exportação ---------- */
+  .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; background: #e5e7eb; flex-shrink: 0; }
+  .avatar.ph { font-size: 11px; font-weight: 700; color: #4b5563; }
+  .name-cell { display: flex; align-items: center; gap: 8px; }
+  .photo-row { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; padding: 10px; border: 1px dashed var(--border); background: #fafbfc; }
+  .photo-preview { width: 84px; height: 84px; flex-shrink: 0; border: 1px solid var(--border); background: #e5e7eb; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; }
+  .photo-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-preview span { font-size: 11px; color: var(--muted); text-align: center; padding: 4px; }
+  .photo-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .gen-box { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 10px; padding: 8px 10px; background: #fdfaf6; border: 1px solid #f0d9c4; }
+  .steps-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .check-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-bottom: 10px; }
+  .check-list label { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; padding: 6px 8px; border: 1px solid var(--border); background: #fff; }
+  .check-list label:hover { background: #f4f6f8; }
+  .check-inline { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; padding: 6px 0; }
+  #print-root { display: none; }
+  @media (max-width: 520px) {
+    .gen-box { grid-template-columns: 1fr; }
+    .steps-grid { grid-template-columns: 1fr 1fr; }
+    .check-list { grid-template-columns: 1fr; }
+    .photo-row { flex-direction: column; align-items: flex-start; }
+  }
+
+  /* ---------- Documento PDF (impressão das guias escolhidas) ---------- */
+  @media print {
+    body.printing-export #app, body.printing-export #modal-root, body.printing-export #toast-root { display: none !important; }
+    body.printing-export #print-root { display: block !important; }
+    body.printing-export { background: #fff !important; color: #000 !important; font-size: 10pt; }
+    .pdoc-head { border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 12px; }
+    .pdoc-brand { font-size: 9pt; text-transform: uppercase; letter-spacing: .5px; color: #444; }
+    .pdoc-head h1 { font-size: 17pt; margin: 2px 0; }
+    .pdoc-meta { font-size: 9pt; color: #444; }
+    .psec { break-before: page; page-break-before: always; }
+    .psec:first-of-type { break-before: auto; page-break-before: auto; }
+    .psec h2 { font-size: 13pt; margin: 0 0 8px; padding-bottom: 4px; border-bottom: 1px solid #000; text-transform: uppercase; }
+    .psec h3 { font-size: 11pt; margin: 14px 0 4px; }
+    .ptbl { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 10px; }
+    .ptbl th, .ptbl td { border: 1px solid #888; padding: 4px 6px; text-align: left; vertical-align: middle; }
+    .ptbl th { background: #e5e7eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .ptbl thead { display: table-header-group; }
+    .ptbl tr { break-inside: avoid; page-break-inside: avoid; }
+    .ptbl .num { text-align: right; }
+    .ptbl .ctr { text-align: center; }
+    .ptbl .k { width: 190px; font-weight: 700; background: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pimg { width: 38px; height: 38px; object-fit: cover; border-radius: 50%; display: block; }
+    .ppara { font-size: 10pt; line-height: 1.5; white-space: pre-line; margin: 0 0 8px; }
+    .pblock { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
+    .pblock ul, .pblock ol { margin: 4px 0 8px 18px; padding: 0; font-size: 10pt; }
+    .pmuted { color: #555; }
+  }
+</style>
+</head>
+<body>
+<noscript>Esta plataforma precisa de JavaScript habilitado para funcionar.</noscript>
+<div id="app"></div>
+<div id="modal-root"></div>
+<div id="print-root"></div>
+<div id="toast-root" role="status" aria-live="polite"></div>
+<input type="file" id="import-file" accept=".json,application/json" class="hidden">
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     ARMAZENAMENTO (localStorage com reserva em memória)
+     As chaves são as mesmas da versão anterior, então os dados
+     já salvos no navegador continuam funcionando.
+     ========================================================= */
+  var KEY_MASTER = 'rh_app_master_auth';
+  var KEY_INDEX = 'rh_app_companies_index';
+  var KEY_SEEDED = 'rh_app_seeded';
+  var SUFFIXES = ['empresa', 'cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas', 'missao', 'auth', 'analises', 'tabela'];
+  var memory = {};
+  var storageOk = true;
+  var warned = false;
+
+  function rawGet(k) {
+    try { var v = localStorage.getItem(k); return v === null ? (k in memory ? memory[k] : null) : v; }
+    catch (e) { storageOk = false; return k in memory ? memory[k] : null; }
+  }
+  function rawSet(k, v) {
+    try { localStorage.setItem(k, v); delete memory[k]; }
+    catch (e) {
+      storageOk = false; memory[k] = v;
+      if (!warned) { warned = true; toast('O navegador não conseguiu gravar (armazenamento cheio ou bloqueado). Exporte um backup agora.', true); }
+    }
+  }
+  function rawDel(k) {
+    try { localStorage.removeItem(k); } catch (e) { storageOk = false; }
+    delete memory[k];
+  }
+  function readJson(k, def) {
+    try { var r = rawGet(k); return r === null ? def : JSON.parse(r); } catch (e) { return def; }
+  }
+  function writeJson(k, v) { rawSet(k, JSON.stringify(v)); }
+
+  function ckey(id, s) { return 'rh_app_' + id + '_' + s; }
+  function load(id, s, def) { return readJson(ckey(id, s), def); }
+  function save(id, s, v) { writeJson(ckey(id, s), v); }
+  function getIndex() { var l = readJson(KEY_INDEX, []); return Array.isArray(l) ? l : []; }
+  function setIndex(l) { writeJson(KEY_INDEX, l); }
+  function wipeCompany(id) {
+    SUFFIXES.forEach(function (s) { rawDel(ckey(id, s)); });
+    setIndex(getIndex().filter(function (c) { return c.id !== id; }));
+  }
+
+  /* =========================================================
+     SENHAS (SHA-256 + salt, com reserva djb2)
+     Na verificação aceitamos os dois formatos, para que uma senha
+     criada num contexto do navegador continue valendo em outro.
+     ========================================================= */
+  function genSalt() {
+    var a = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
+    else for (var i = 0; i < 16; i++) a[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(a, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+  function djb2(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) { h = ((h << 5) + h) + str.charCodeAt(i); h = h & h; }
+    return Math.abs(h).toString(16).padStart(16, '0');
+  }
+  async function sha256(text) {
+    if (!(window.crypto && crypto.subtle && crypto.subtle.digest)) return null;
+    try {
+      var d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return Array.prototype.map.call(new Uint8Array(d), function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch (e) { return null; }
+  }
+  async function makeAuth(pass) {
+    var salt = genSalt(), text = salt + '::' + pass;
+    return { salt: salt, hash: (await sha256(text)) || djb2(text) };
+  }
+  async function checkAuth(auth, pass) {
+    if (!auth || !auth.salt || !auth.hash) return false;
+    var text = auth.salt + '::' + pass;
+    var s = await sha256(text);
+    return auth.hash === s || auth.hash === djb2(text);
+  }
+  function getMaster() { var m = readJson(KEY_MASTER, null); return m && m.hash ? m : null; }
+  async function checkMaster(pass) { return checkAuth(getMaster(), pass); }
+
+  /* =========================================================
+     UTILITÁRIOS
+     ========================================================= */
+  function esc(t) {
+    if (t === null || t === undefined) return '';
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  function uid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function num(v, def) { var n = parseFloat(v); return isFinite(n) ? n : (def === undefined ? 0 : def); }
+  function clamp(n, a, b) { return Math.min(b, Math.max(a, n)); }
+  function money(v) { return num(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function fmtDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : '-';
+  }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function sel(cond) { return cond ? 'selected' : ''; }
+  function slug(s) {
+    return String(s || 'empresa').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'empresa';
+  }
+
+  var COMPETENCIAS = [
+    ['comunicacao', 'Comunicação', 'Com.'],
+    ['equipe', 'Equipe', 'Equipe'],
+    ['produtividade', 'Produtividade', 'Prod.'],
+    ['iniciativa', 'Iniciativa', 'Inic.'],
+    ['qualidade', 'Qualidade', 'Qual.']
+  ];
+  function calcMedia(av) {
+    var s = 0;
+    COMPETENCIAS.forEach(function (c) { s += clamp(num(av[c[0]], 1), 1, 5); });
+    return Math.round((s / COMPETENCIAS.length) * 100) / 100;
+  }
+  function conceito(m) {
+    if (m >= 4.5) return { texto: 'Excelente', tag: 'tag-green' };
+    if (m >= 3.8) return { texto: 'Supera expectativas', tag: 'tag-blue' };
+    if (m >= 2.8) return { texto: 'Atende expectativas', tag: 'tag-amber' };
+    if (m >= 2.0) return { texto: 'Em desenvolvimento', tag: 'tag-amber' };
+    return { texto: 'Insatisfatório', tag: 'tag-red' };
+  }
+
+  var toastTimer = 0;
+  function toast(msg, isErr) {
+    var root = document.getElementById('toast-root');
+    var el = document.createElement('div');
+    el.className = 'toast' + (isErr ? ' err' : '');
+    el.textContent = msg;
+    root.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, isErr ? 6000 : 3500);
+  }
+
+  /* =========================================================
+     ESTADO
+     ========================================================= */
+  var state = {
+    companyId: null,
+    tab: 'dashboard',
+    modal: null,
+    modalData: {},
+    analiseCargoId: null,
+    filters: { cargoSector: '', cargoSearch: '', funcSearch: '', funcStatus: '', fbType: '', fbFunc: '' }
+  };
+  function resetFilters() {
+    state.filters = { cargoSector: '', cargoSearch: '', funcSearch: '', funcStatus: '', fbType: '', fbFunc: '' };
+  }
+
+  var TABS = [
+    ['dashboard', 'Dashboard Geral', '&#9632;', 'PAINEL DE CONTROLE'],
+    ['empresa', 'Perfil da Empresa', '&#128188;', 'DADOS CADASTRAIS DA EMPRESA'],
+    ['missao', 'Missão, Visão e Valores', '&#9873;', 'CULTURA ORGANIZACIONAL (MISSÃO, VISÃO, VALORES)'],
+    ['cargos', 'Estrutura de Cargos', '&#9776;', 'PLANO DE CARGOS E REMUNERAÇÃO'],
+    ['tabela', 'Tabela Salarial', '&#36;', 'TABELA SALARIAL'],
+    ['analise', 'Descrição e Análise', '&#128221;', 'ANÁLISE E DESCRIÇÃO FUNCIONAL DE CARGOS'],
+    ['funcionarios', 'Colaboradores', '&#128101;', 'QUADRO DE COLABORADORES'],
+    ['avaliacao', 'Avaliação de Desempenho', '&#9733;', 'GESTÃO E AVALIAÇÃO DE DESEMPENHO'],
+    ['feedbacks', 'Registro de Feedback', '&#128488;', 'HISTÓRICO DE FEEDBACKS'],
+    ['politicas', 'Políticas Organizacionais', '&#128203;', 'MANUAL DE POLÍTICAS E NORMAS INTERNAS']
+  ];
+  function tabInfo(t) { return TABS.filter(function (x) { return x[0] === t; })[0] || TABS[0]; }
+  function cid() { return state.companyId; }
+
+  /* =========================================================
+     TELAS
+     ========================================================= */
+  function viewSelect() {
+    var list = getIndex();
+    var hasExample = list.some(function (c) { return c.exemplo; });
+    var rows = list.map(function (c) {
+      return '<div class="company-row">' +
+        '<div><div style="font-weight:700;font-size:12.5px;">' + esc(c.nome) + '</div>' +
+        '<div class="muted" style="font-size:10.5px;margin-top:2px;">Segmento: ' + esc(c.segmento || 'Geral') + ' &bull; Porte: ' + esc(c.porte || 'Média') + ' &bull; Criada em: ' + esc(c.criadoEm || '-') + '</div></div>' +
+        '<div class="company-actions">' +
+        '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="login_company" data-id="' + esc(c.id) + '">Entrar</button>' +
+        '<button class="btn btn-sm" data-action="open-modal" data-modal="rename_company" data-id="' + esc(c.id) + '">Renomear</button>' +
+        '<button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_company" data-id="' + esc(c.id) + '">Excluir</button>' +
+        '</div></div>';
+    }).join('');
+
+    return '<div class="select-screen"><div class="select-card">' +
+      '<div class="select-head"><div><div style="font-weight:700;font-size:15px;letter-spacing:.4px;">PLATAFORMA MAKER</div>' +
+      '<div style="font-size:11px;opacity:.85;">Simulação de Gestão de Recursos Humanos</div></div>' +
+      '<button class="btn btn-sm" data-action="open-modal" data-modal="master_panel">&#9881; Área do Professor</button></div>' +
+      '<div class="select-body">' +
+      '<div class="toolbar-group" style="justify-content:space-between;margin-bottom:12px;">' +
+      '<div><h2 style="font-size:13px;font-weight:700;margin:0;text-transform:uppercase;">Qual empresa fictícia você vai gerenciar?</h2>' +
+      '<span class="muted" style="font-size:11px;">Selecione o workspace da sua equipe para iniciar os trabalhos.</span></div>' +
+      '<div class="toolbar-group">' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="create_company">+ Criar Nova Empresa</button>' +
+      '<button class="btn btn-sm" data-action="import">&#128190; Importar Empresa</button></div></div>' +
+      (list.length ? rows : '<div class="dashed"><strong style="display:block;margin-bottom:6px;color:#22262a;">Nenhuma empresa cadastrada ainda.</strong>Clique em "+ Criar Nova Empresa" para começar. Sugestão de roteiro: perfil da empresa &rarr; cargos &rarr; tabela salarial &rarr; colaboradores &rarr; avaliações e feedbacks.<br>Já tem um backup? Use "Importar Empresa".</div>') +
+      '<div class="notice"><strong>Ambiente de simulação didática:</strong> as informações ficam salvas apenas no armazenamento local deste navegador. Exporte um backup em JSON com frequência.' +
+      (storageOk ? '' : '<br><strong>Atenção:</strong> o navegador bloqueou o armazenamento local; os dados valem só enquanto esta aba estiver aberta.') + '</div>' +
+      (hasExample ? '<div class="notice">A empresa de exemplo usa a senha inicial <strong>1234</strong>. Altere em <em>Segurança</em> depois de entrar.</div>' : '') +
+      '<div class="muted" style="margin-top:14px;text-align:right;font-size:10.5px;">Desenvolvido por: João Guilherme Batista</div>' +
+      '</div></div></div>';
+  }
+
+  function viewWorkspace() {
+    var comp = load(cid(), 'empresa', { nome: 'Empresa Fictícia' });
+    var nav = TABS.map(function (t) {
+      return '<li><button class="' + (state.tab === t[0] ? 'active' : '') + '" data-action="set-tab" data-tab="' + t[0] + '"' +
+        (state.tab === t[0] ? ' aria-current="page"' : '') + '><span class="nav-ico">' + t[2] + '</span> ' + esc(t[1]) + '</button></li>';
+    }).join('');
+    return '<div class="erp">' +
+      '<header class="topbar"><div class="brand"><i>&#9632;</i> PLATAFORMA MAKER <span class="brand-sub">RH ERP</span></div>' +
+      '<div class="top-actions"><span class="top-company">Empresa: <strong>' + esc(comp.nome) + '</strong></span>' +
+      '<button class="btn btn-sm" data-action="export" title="Baixar backup completo em JSON">Exportar Backup</button>' +
+      '<button class="btn btn-sm" data-action="import" title="Importar um arquivo JSON">Importar</button>' +
+      '<button class="btn btn-sm" data-action="open-modal" data-modal="change_pass_inside">Segurança</button>' +
+      '<button class="btn btn-sm" data-action="open-modal" data-modal="master_panel">Prof./Admin</button>' +
+      '<button class="btn btn-sm" data-action="exit-company">Trocar Empresa</button></div></header>' +
+      '<div class="body"><aside class="sidebar">' +
+      '<div class="chip"><div class="chip-label">Workspace Ativo</div><div class="chip-name" title="' + esc(comp.nome) + '">' + esc(comp.nome) + '</div></div>' +
+      '<ul class="nav">' + nav + '</ul><div class="side-foot">Simulação de RH &bull; Formação Técnica</div></aside>' +
+      '<main class="main"><div class="subbar"><div class="crumb">RH &gt; <strong>' + esc(tabInfo(state.tab)[3]) + '</strong></div>' +
+      '<div class="subbar-actions"><button class="btn btn-sm" data-action="open-modal" data-modal="export_pdf">Exportar PDF</button>' +
+      '<button class="btn btn-danger btn-sm" data-action="reset-data">Redefinir Dados</button></div></div>' +
+      '<div class="content"><div class="print-only">' + esc(comp.nome) + ' — ' + esc(tabInfo(state.tab)[3]) + '</div><div id="module">' + viewModule() + '</div></div>' +
+      '<footer class="foot"><div>Plataforma Maker &bull; Simulação de Gestão de Recursos Humanos</div><div>Desenvolvido por: João Guilherme Batista</div></footer>' +
+      '</main></div></div>';
+  }
+
+  function viewModule() {
+    switch (state.tab) {
+      case 'empresa': return modEmpresa();
+      case 'missao': return modMissao();
+      case 'cargos': return modCargos();
+      case 'tabela': return modTabela();
+      case 'analise': return modAnalise();
+      case 'funcionarios': return modFuncionarios();
+      case 'avaliacao': return modAvaliacao();
+      case 'feedbacks': return modFeedbacks();
+      case 'politicas': return modPoliticas();
+      default: return modDashboard();
+    }
+  }
+
+  function didactic(id, title, body) {
+    return '<div class="didactic collapsed" id="' + id + '"><button class="didactic-head" data-action="toggle-didactic" data-target="' + id + '" aria-expanded="false">' +
+      '<span>? Ajuda Didática — ' + esc(title) + '</span><span>&#9662;</span></button><div class="didactic-body">' + body + '</div></div>';
+  }
+
+  /* ---------- Dashboard ---------- */
+  function modDashboard() {
+    var id = cid();
+    var comp = load(id, 'empresa', {});
+    var cargos = arr(load(id, 'cargos', []));
+    var funcs = arr(load(id, 'funcionarios', []));
+    var avs = arr(load(id, 'avaliacoes', []));
+    var fbs = arr(load(id, 'feedbacks', []));
+    var pols = arr(load(id, 'politicas', []));
+    var ativos = funcs.filter(function (f) { return f.status === 'Ativo'; }).length;
+    var media = avs.length ? (avs.reduce(function (s, a) { return s + calcMedia(a); }, 0) / avs.length).toFixed(2).replace('.', ',') : '-';
+
+    var tabDash = getTabela();
+    var massa = funcs.filter(function (f) { return f.status === 'Ativo'; }).reduce(function (t, f) { return t + (salarioDe(f, tabDash) || 0); }, 0);
+    function k(label, val, accent) {
+      return '<div class="kpi' + (accent ? ' accent' : '') + '"><div class="kpi-label">' + label + '</div><div class="kpi-val">' + val + '</div></div>';
+    }
+    return '<div class="kpis">' +
+      k('Cargos Cadastrados', cargos.length, true) +
+      k('Colaboradores Totais / Ativos', funcs.length + ' <small>(' + ativos + ' ativos)</small>') +
+      k('Avaliações Realizadas', avs.length) +
+      k('Feedbacks Registrados', fbs.length) +
+      k('Políticas Normativas', pols.length) +
+      k('Média Geral de Desempenho', media + ' <small>/ 5,0</small>') +
+      k('Massa Salarial Mensal (ativos enquadrados)', money(massa)) + '</div>' +
+      '<div class="grid-2"><div class="card"><div class="card-title"><span>Ficha Cadastral da Organização</span>' +
+      '<button class="btn btn-sm" data-action="set-tab" data-tab="empresa">Editar Dados</button></div>' +
+      '<table class="kv">' +
+      '<tr><td>Razão Social:</td><td><strong>' + esc(comp.nome || '-') + '</strong></td></tr>' +
+      '<tr><td>CNPJ Simulado:</td><td>' + esc(comp.cnpj || 'Não informado') + '</td></tr>' +
+      '<tr><td>Setor / Segmento:</td><td>' + esc(comp.segmento || '-') + '</td></tr>' +
+      '<tr><td>Porte Empresarial:</td><td>' + esc(comp.porte || 'Média') + '</td></tr>' +
+      '<tr><td>Localização:</td><td>' + esc(comp.cidadeUf || '-') + ' (Fundada em ' + esc(comp.anoFundacao || '-') + ')</td></tr>' +
+      '<tr><td>Resumo do Negócio:</td><td>' + esc(comp.descricao || '-') + '</td></tr></table></div>' +
+      '<div class="card"><div class="card-title"><span>Atalhos Rápidos de Operação</span></div><div class="quick">' +
+      '<button class="btn" data-action="open-modal" data-modal="cargo_form">+ Novo Cargo</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="func_form">+ Novo Colaborador</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="avaliacao_form">+ Lançar Avaliação</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="feedback_form">+ Lançar Feedback</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="politica_form">+ Nova Política</button>' +
+      '<button class="btn" data-action="set-tab" data-tab="analise">Ficha de Cargo</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="faixa_form">+ Faixa Salarial</button>' +
+      '<button class="btn" data-action="open-modal" data-modal="export_pdf">Exportar PDF</button></div>' +
+      '<div class="notice"><strong>Nota didática:</strong> mantenha a descrição dos cargos alinhada com as avaliações semestrais para fundamentar promoções e planos de capacitação técnica.</div></div></div>';
+  }
+
+  /* ---------- Empresa ---------- */
+  function modEmpresa() {
+    var c = load(cid(), 'empresa', {});
+    return '<div class="card"><div class="card-title"><span>Atualização Cadastral do Perfil Corporativo</span></div>' +
+      '<form data-submit="save-empresa">' +
+      '<div class="row w21"><div class="fg"><label class="fl" for="e-nome">Nome da Empresa (Razão Social / Nome Fantasia)</label>' +
+      '<input id="e-nome" class="inp w100" name="nome" required value="' + esc(c.nome || '') + '"></div>' +
+      '<div class="fg"><label class="fl" for="e-cnpj">CNPJ (fictício)</label><input id="e-cnpj" class="inp w100" name="cnpj" value="' + esc(c.cnpj || '') + '" placeholder="00.000.000/0001-00"></div></div>' +
+      '<div class="row c4"><div class="fg"><label class="fl" for="e-seg">Segmento / Ramo</label><input id="e-seg" class="inp w100" name="segmento" value="' + esc(c.segmento || '') + '"></div>' +
+      '<div class="fg"><label class="fl" for="e-porte">Porte</label><select id="e-porte" class="sel w100" name="porte">' +
+      ['Pequena', 'Média', 'Grande'].map(function (p) { return '<option value="' + p + '" ' + sel(c.porte === p) + '>' + p + ' Empresa</option>'; }).join('') + '</select></div>' +
+      '<div class="fg"><label class="fl" for="e-num">Nº estimado de funcionários</label><input id="e-num" type="number" min="0" class="inp w100" name="num_func" value="' + esc(c.numFuncionariosEstimado ?? 25) + '"></div>' +
+      '<div class="fg"><label class="fl" for="e-ano">Ano de fundação</label><input id="e-ano" type="number" min="1800" max="2100" class="inp w100" name="ano" value="' + esc(c.anoFundacao ?? 2020) + '"></div></div>' +
+      '<div class="fg"><label class="fl" for="e-cid">Cidade / UF</label><input id="e-cid" class="inp w100" name="cidade_uf" value="' + esc(c.cidadeUf || '') + '"></div>' +
+      '<div class="fg"><label class="fl" for="e-desc">Descrição geral das atividades e negócio</label><textarea id="e-desc" class="txt w100" name="descricao" rows="4">' + esc(c.descricao || '') + '</textarea></div>' +
+      '<div style="text-align:right;"><button type="submit" class="btn btn-primary">Salvar Alterações</button></div></form></div>';
+  }
+
+  /* ---------- Missão ---------- */
+  function modMissao() {
+    var mv = load(cid(), 'missao', {}) || {};
+    var vals = arr(mv.valores);
+    return didactic('did-missao', 'Fundamentos da Cultura Organizacional',
+      '<strong>Missão:</strong> propósito fundamental da empresa, o que ela entrega hoje à sociedade e aos clientes.<br>' +
+      '<strong>Visão:</strong> posição aspiracional de longo prazo que a empresa deseja alcançar no mercado.<br>' +
+      '<strong>Valores:</strong> princípios éticos inegociáveis que orientam as decisões de contratação, promoção e convivência no trabalho.') +
+      '<div class="grid-eq"><div class="card"><div class="card-title">Missão e Visão</div><form data-submit="save-missao">' +
+      '<div class="fg"><label class="fl" for="m-mis">Missão organizacional</label><textarea id="m-mis" class="txt w100" name="missao" rows="3" required>' + esc(mv.missao || '') + '</textarea></div>' +
+      '<div class="fg"><label class="fl" for="m-vis">Visão de futuro</label><textarea id="m-vis" class="txt w100" name="visao" rows="3" required>' + esc(mv.visao || '') + '</textarea></div>' +
+      '<div style="text-align:right;"><button type="submit" class="btn btn-primary">Gravar Missão e Visão</button></div></form></div>' +
+      '<div class="card"><div class="card-title"><span>Valores Corporativos (' + vals.length + ')</span>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="valor_form">+ Adicionar Valor</button></div>' +
+      (vals.length ? '<div class="table-scroll"><table class="tbl"><thead><tr><th style="width:30px;">#</th><th>Princípio / Valor</th><th class="num" style="width:90px;">Ação</th></tr></thead><tbody>' +
+        vals.map(function (v, i) {
+          return '<tr><td>' + (i + 1) + '</td><td><strong>' + esc(v) + '</strong></td><td class="acts"><button class="btn btn-danger btn-sm" data-action="del-valor" data-index="' + i + '">Remover</button></td></tr>';
+        }).join('') + '</tbody></table></div>'
+        : '<div class="muted" style="padding:14px;text-align:center;">Nenhum valor institucional cadastrado. Use o botão acima para adicionar.</div>') +
+      '</div></div>';
+  }
+
+  /* ---------- Cargos ---------- */
+  function cargosFiltered() {
+    var f = state.filters;
+    var list = arr(load(cid(), 'cargos', []));
+    if (f.cargoSector) list = list.filter(function (c) { return c.setor === f.cargoSector; });
+    if (f.cargoSearch) {
+      var q = f.cargoSearch.toLowerCase();
+      list = list.filter(function (c) { return (c.nome || '').toLowerCase().indexOf(q) >= 0 || (c.cbo || '').toLowerCase().indexOf(q) >= 0; });
+    }
+    return list;
+  }
+  function modCargos() {
+    var all = arr(load(cid(), 'cargos', []));
+    var sectors = Array.from(new Set(all.map(function (c) { return c.setor; }).filter(Boolean))).sort();
+    var list = cargosFiltered();
+    return '<div class="table-card"><div class="toolbar"><div class="toolbar-group"><span class="toolbar-title">Cargos e Salários (' + all.length + ')</span>' +
+      '<input type="search" class="inp" style="width:210px;" placeholder="Buscar por cargo ou CBO..." aria-label="Buscar cargo" data-filter="cargoSearch" value="' + esc(state.filters.cargoSearch) + '">' +
+      '<select class="sel" aria-label="Filtrar por setor" data-filter="cargoSector"><option value="">Todos os Setores</option>' +
+      sectors.map(function (s) { return '<option value="' + esc(s) + '" ' + sel(state.filters.cargoSector === s) + '>' + esc(s) + '</option>'; }).join('') + '</select></div>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="cargo_form">+ Novo Cargo</button></div>' +
+      '<div class="table-scroll"><table class="tbl"><thead><tr><th>Nome do Cargo</th><th>Setor / Departamento</th><th>Nível</th><th>CBO</th><th class="num">Piso</th><th class="num">Teto</th><th class="num">Ações</th></tr></thead><tbody>' +
+      (list.length ? list.map(function (c) {
+        return '<tr><td><strong>' + esc(c.nome) + '</strong></td><td>' + esc(c.setor || '-') + '</td><td><span class="tag">' + esc(c.nivel || 'Operacional') + '</span></td>' +
+          '<td style="font-family:var(--mono);font-size:11px;">' + esc(c.cbo || '-') + '</td><td class="num">' + money(c.piso) + '</td><td class="num">' + money(c.teto) + '</td>' +
+          '<td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="cargo_form" data-id="' + esc(c.id) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del-cargo" data-id="' + esc(c.id) + '">Excluir</button></td></tr>';
+      }).join('') : '<tr><td colspan="7" class="empty">' + (all.length ? 'Nenhum cargo encontrado para os filtros aplicados.' : 'Nenhum cargo cadastrado ainda.') + '</td></tr>') +
+      '</tbody></table></div></div>';
+  }
+
+  /* ---------- Tabela salarial ---------- */
+  var N_STEPS = 5;
+  var STEP_LABELS = ['A', 'B', 'C', 'D', 'E'];
+  function normTabela(t) {
+    t = t && typeof t === 'object' ? t : {};
+    return {
+      nome: str(t.nome), vigencia: str(t.vigencia), observacao: str(t.observacao),
+      faixas: objs(t.faixas).map(function (x) {
+        var steps = arr(x.steps).slice(0, N_STEPS).map(function (v) { return Math.max(0, num(v)); });
+        while (steps.length < N_STEPS) steps.push(0);
+        return { id: str(x.id) || uid('fx'), grau: str(x.grau), descricao: str(x.descricao), cargoId: str(x.cargoId), steps: steps };
+      })
+    };
+  }
+  function getTabela() { return normTabela(load(cid(), 'tabela', null)); }
+  function salarioDe(f, tab) {
+    if (!f || !f.faixaId) return null;
+    var fx = tab.faixas.filter(function (x) { return x.id === f.faixaId; })[0];
+    if (!fx) return null;
+    var v = num(fx.steps[clamp(parseInt(f.step, 10) || 0, 0, N_STEPS - 1)]);
+    return v > 0 ? v : null;
+  }
+  function enquadramento(f, tab) {
+    var fx = f && f.faixaId ? tab.faixas.filter(function (x) { return x.id === f.faixaId; })[0] : null;
+    return fx ? fx.grau + ' · Step ' + STEP_LABELS[clamp(parseInt(f.step, 10) || 0, 0, N_STEPS - 1)] : '';
+  }
+  function amplitude(fx) {
+    var a = fx.steps[0], b = fx.steps[N_STEPS - 1];
+    return a > 0 ? ((b / a - 1) * 100).toFixed(1).replace('.', ',') + '%' : '-';
+  }
+  function fmtVigencia(v) {
+    var m = /^(\d{4})-(\d{2})$/.exec(v || '');
+    return m ? m[2] + '/' + m[1] : '-';
+  }
+  function modTabela() {
+    var tab = getTabela();
+    var cargoMap = {};
+    inCompany('cargos').forEach(function (c) { cargoMap[c.id] = c.nome; });
+    var funcs = inCompany('funcionarios');
+    var faixas = tab.faixas.slice().sort(function (a, b) { return a.steps[0] - b.steps[0]; });
+    return didactic('did-tabela', 'Tabela Salarial e Enquadramento',
+      'A <strong>tabela salarial</strong> organiza a remuneração em <strong>faixas</strong> (graus ou níveis). Cada faixa tem 5 <strong>steps</strong> (A a E), que representam a progressão salarial dentro da mesma faixa, por mérito ou tempo de casa.<br>' +
+      'A <strong>amplitude</strong> mostra quanto o último step é maior que o primeiro. O <strong>enquadramento</strong> liga o colaborador a uma faixa e a um step, no cadastro dele; o salário passa a vir da tabela.<br>' +
+      'Use <strong>Aplicar reajuste</strong> para simular dissídio ou revisão geral: todos os steps são multiplicados pelo percentual.') +
+      '<div class="card"><div class="card-title"><span>Parâmetros da tabela</span></div><form data-submit="save-tabela-cfg">' +
+      '<div class="row w21"><div class="fg"><label class="fl" for="t-nome">Nome da tabela</label><input id="t-nome" class="inp w100" name="nome" value="' + esc(tab.nome) + '" placeholder="Ex.: Tabela salarial 2026 — Administrativo"></div>' +
+      '<div class="fg"><label class="fl" for="t-vig">Vigência (mês/ano)</label><input id="t-vig" type="month" class="inp w100" name="vigencia" value="' + esc(tab.vigencia) + '"></div></div>' +
+      '<div class="fg"><label class="fl" for="t-obs">Observações / critérios de progressão</label><textarea id="t-obs" class="txt w100" name="observacao" rows="2" placeholder="Ex.: Progressão por mérito a cada 12 meses, com nota mínima 3,8 na avaliação.">' + esc(tab.observacao) + '</textarea></div>' +
+      '<div style="text-align:right;"><button type="submit" class="btn btn-primary">Salvar parâmetros</button></div></form></div>' +
+      '<div class="table-card"><div class="toolbar"><span class="toolbar-title">Faixas salariais (' + faixas.length + ')</span><div class="toolbar-group">' +
+      '<button class="btn btn-sm" data-action="open-modal" data-modal="reajuste_form"' + (faixas.length ? '' : ' disabled') + '>Aplicar reajuste (%)</button>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="faixa_form">+ Nova Faixa</button></div></div>' +
+      '<div class="table-scroll"><table class="tbl"><thead><tr><th>Faixa</th><th>Descrição / cargo vinculado</th>' +
+      STEP_LABELS.map(function (l) { return '<th class="num">Step ' + l + '</th>'; }).join('') +
+      '<th class="num">Amplitude</th><th class="ctr">Colab.</th><th class="num">Ações</th></tr></thead><tbody>' +
+      (faixas.length ? faixas.map(function (fx) {
+        var n = funcs.filter(function (f) { return f.faixaId === fx.id; }).length;
+        return '<tr><td><strong>' + esc(fx.grau) + '</strong></td><td>' + esc(fx.descricao || '-') +
+          (fx.cargoId && cargoMap[fx.cargoId] ? '<div class="muted" style="font-size:10.5px;">Cargo: ' + esc(cargoMap[fx.cargoId]) + '</div>' : '') + '</td>' +
+          fx.steps.map(function (v) { return '<td class="num">' + money(v) + '</td>'; }).join('') +
+          '<td class="num">' + amplitude(fx) + '</td><td class="ctr">' + n + '</td>' +
+          '<td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="faixa_form" data-id="' + esc(fx.id) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del-faixa" data-id="' + esc(fx.id) + '">Excluir</button></td></tr>';
+      }).join('') : '<tr><td colspan="10" class="empty">Nenhuma faixa cadastrada. Clique em "+ Nova Faixa" para montar a tabela.</td></tr>') +
+      '</tbody></table></div></div>';
+  }
+
+  /* ---------- Análise ---------- */
+  function modAnalise() {
+    var id = cid();
+    var cargos = arr(load(id, 'cargos', []));
+    var analises = load(id, 'analises', {}) || {};
+    if (!cargos.length) {
+      return '<div class="card" style="text-align:center;padding:24px;"><p class="muted">Nenhum cargo cadastrado na empresa ainda. Cadastre cargos primeiro em <strong>Estrutura de Cargos</strong>.</p>' +
+        '<button class="btn btn-primary" data-action="set-tab" data-tab="cargos">Ir para Cargos</button></div>';
+    }
+    var cargo = cargos.filter(function (c) { return c.id === state.analiseCargoId; })[0] || cargos[0];
+    state.analiseCargoId = cargo.id;
+    var fi = analises[cargo.id] || {};
+    var req = fi.requisitos || {};
+    var completo = !!(fi.objetivo && arr(fi.responsabilidades).length && req.escolaridade);
+
+    return didactic('did-analise', 'Descrição e Análise Funcional de Cargos',
+      'A <strong>Descrição do Cargo</strong> elenca o <em>que</em> o colaborador faz (tarefas e responsabilidades) e <em>por que</em> faz (objetivo do cargo).<br>' +
+      'A <strong>Análise do Cargo</strong> aponta os requisitos humanos que a função exige: formação, tempo de experiência, competências técnicas (hard skills) e comportamentais (soft skills), além do ambiente de trabalho.') +
+      '<div class="grid-an"><div class="table-card" style="align-self:start;"><div class="toolbar" style="padding:6px 10px;"><span class="toolbar-title" style="font-size:11px;">Selecione o cargo</span></div>' +
+      '<ul class="cargo-list">' + cargos.map(function (c) {
+        var ok = analises[c.id] && analises[c.id].objetivo;
+        return '<li><button class="' + (c.id === cargo.id ? 'sel' : '') + '" data-action="select-cargo" data-id="' + esc(c.id) + '"><span>' + esc(c.nome) + '</span>' +
+          '<span class="tag ' + (ok ? 'tag-green' : 'tag-amber') + '" style="font-size:9px;">' + (ok ? 'Completo' : 'Pendente') + '</span></button></li>';
+      }).join('') + '</ul></div>' +
+      '<div class="card" style="margin-bottom:0;"><div class="card-title"><div>Ficha do Cargo: <strong>' + esc(cargo.nome) + '</strong> ' +
+      '<span class="muted" style="font-size:10.5px;font-weight:400;">(' + esc(cargo.setor) + ' — ' + esc(cargo.nivel) + ')</span></div>' +
+      '<span class="tag ' + (completo ? 'tag-green' : 'tag-amber') + '">' + (completo ? 'Preenchimento completo' : 'Incompleto') + '</span></div>' +
+      '<form data-submit="save-analise"><input type="hidden" name="cargo_id" value="' + esc(cargo.id) + '">' +
+      '<div class="fg"><label class="fl" for="a-obj">Missão / objetivo principal da função</label><textarea id="a-obj" class="txt w100" name="objetivo" rows="2" required placeholder="Ex.: Gerenciar as rotinas de atendimento, coordenando o fluxo de demandas...">' + esc(fi.objetivo || '') + '</textarea></div>' +
+      '<div class="fg"><label class="fl" for="a-resp">Principais responsabilidades e atribuições (uma por linha)</label><textarea id="a-resp" class="txt w100" name="responsabilidades" rows="4" style="font-family:var(--mono);font-size:11.5px;" placeholder="Executar fechamento de ponto mensal&#10;Emitir relatórios de absenteísmo">' + esc(arr(fi.responsabilidades).join('\n')) + '</textarea>' +
+      '<div class="hint">Cada linha vira um item formal da descrição.</div></div>' +
+      '<div class="row c2"><div class="fg"><label class="fl" for="a-esc">Escolaridade / formação exigida</label><input id="a-esc" class="inp w100" name="escolaridade" value="' + esc(req.escolaridade || '') + '" placeholder="Ex.: Superior completo em Administração"></div>' +
+      '<div class="fg"><label class="fl" for="a-exp">Tempo de experiência prévio</label><input id="a-exp" class="inp w100" name="experiencia" value="' + esc(req.experiencia || '') + '" placeholder="Ex.: Mínimo 1 ano na área"></div></div>' +
+      '<div class="row c2"><div class="fg"><label class="fl" for="a-tec">Competências técnicas (hard skills)</label><textarea id="a-tec" class="txt w100" name="tecnicas" rows="2" placeholder="Ex.: Excel intermediário, conhecimento em CLT...">' + esc(req.tecnicas || '') + '</textarea></div>' +
+      '<div class="fg"><label class="fl" for="a-comp">Competências comportamentais (soft skills)</label><textarea id="a-comp" class="txt w100" name="comportamentais" rows="2" placeholder="Ex.: Comunicação assertiva, trabalho em equipe...">' + esc(req.comportamentais || '') + '</textarea></div></div>' +
+      '<div class="fg"><label class="fl" for="a-cond">Condições gerais de trabalho e ergonomia</label><input id="a-cond" class="inp w100" name="condicoes" value="' + esc(fi.condicoes || '') + '" placeholder="Ex.: Escritório climatizado, jornada 44h semanais presencial."></div>' +
+      '<div style="text-align:right;"><button type="submit" class="btn btn-primary">Gravar Ficha do Cargo</button></div></form></div></div>';
+  }
+
+  /* ---------- Colaboradores ---------- */
+  function iniciais(nome) {
+    var p = str(nome).trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return (p[0].charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
+  }
+  function isPhoto(v) { return typeof v === 'string' && v.length < 600000 && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(v); }
+  function avatar(f) {
+    if (isPhoto(f.foto)) return '<img class="avatar" src="' + esc(f.foto) + '" alt="Foto de ' + esc(f.nome) + '">';
+    return '<span class="avatar ph" aria-hidden="true">' + esc(iniciais(f.nome)) + '</span>';
+  }
+  function funcsFiltered() {
+    var f = state.filters;
+    var list = arr(load(cid(), 'funcionarios', []));
+    if (f.funcStatus) list = list.filter(function (x) { return x.status === f.funcStatus; });
+    if (f.funcSearch) {
+      var q = f.funcSearch.toLowerCase();
+      list = list.filter(function (x) { return (x.nome || '').toLowerCase().indexOf(q) >= 0 || (x.cpf || '').indexOf(f.funcSearch) >= 0; });
+    }
+    return list.slice().sort(function (a, b) { return str(a.nome).localeCompare(str(b.nome), 'pt-BR'); });
+  }
+  function modFuncionarios() {
+    var id = cid();
+    var all = arr(load(id, 'funcionarios', []));
+    var tab = getTabela();
+    var cargoMap = {};
+    arr(load(id, 'cargos', [])).forEach(function (c) { cargoMap[c.id] = c.nome; });
+    var list = funcsFiltered();
+    return '<div class="table-card"><div class="toolbar"><div class="toolbar-group"><span class="toolbar-title">Quadro de Pessoal (' + all.length + ')</span>' +
+      '<input type="search" class="inp" style="width:210px;" placeholder="Buscar por nome ou CPF..." aria-label="Buscar colaborador" data-filter="funcSearch" value="' + esc(state.filters.funcSearch) + '">' +
+      '<select class="sel" aria-label="Filtrar por status" data-filter="funcStatus"><option value="">Todos os Status</option>' +
+      ['Ativo', 'Afastado', 'Inativo'].map(function (s) { return '<option value="' + s + '" ' + sel(state.filters.funcStatus === s) + '>' + s + '</option>'; }).join('') + '</select></div>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="func_form">+ Novo Colaborador</button></div>' +
+      '<div class="table-scroll"><table class="tbl"><thead><tr><th>Colaborador</th><th>CPF</th><th>Cargo vinculado</th><th>Setor</th><th>Admissão</th><th>Faixa / Step</th><th class="num">Salário</th><th>Status</th><th class="num">Ações</th></tr></thead><tbody>' +
+      (list.length ? list.map(function (f) {
+        var sal = salarioDe(f, tab), enq = enquadramento(f, tab);
+        return '<tr><td><div class="name-cell">' + avatar(f) + '<strong>' + esc(f.nome) + '</strong></div></td><td style="font-family:var(--mono);font-size:11px;">' + esc(f.cpf || '-') + '</td>' +
+          '<td>' + esc(cargoMap[f.cargoId] || 'Cargo não localizado') + '</td><td>' + esc(f.setor || '-') + '</td><td>' + fmtDate(f.admissao) + '</td>' +
+          '<td>' + (enq ? esc(enq) : '<span class="muted">Sem enquadramento</span>') + '</td><td class="num">' + (sal ? money(sal) : '-') + '</td>' +
+          '<td><span class="tag ' + (f.status === 'Ativo' ? 'tag-green' : 'tag-amber') + '">' + esc(f.status || 'Ativo') + '</span></td>' +
+          '<td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="func_form" data-id="' + esc(f.id) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del-func" data-id="' + esc(f.id) + '">Excluir</button></td></tr>';
+      }).join('') : '<tr><td colspan="9" class="empty">' + (all.length ? 'Nenhum colaborador encontrado para os filtros aplicados.' : 'Nenhum colaborador registrado.') + '</td></tr>') +
+      '</tbody></table></div></div>';
+  }
+
+  /* ---------- Avaliações ---------- */
+  function modAvaliacao() {
+    var id = cid();
+    var avs = arr(load(id, 'avaliacoes', []));
+    var funcMap = {};
+    arr(load(id, 'funcionarios', [])).forEach(function (f) { funcMap[f.id] = f.nome; });
+    return didactic('did-avaliacao', 'Matriz de Avaliação por Competências',
+      'A avaliação mede 5 competências (notas de 1 a 5): <strong>Comunicação</strong>, <strong>Trabalho em Equipe</strong>, <strong>Produtividade</strong>, <strong>Iniciativa</strong> e <strong>Qualidade do Trabalho</strong>. A média simples define o conceito:<br>' +
+      '&bull; <strong>4,5 a 5,0</strong>: Excelente &nbsp;|&nbsp; &bull; <strong>3,8 a 4,4</strong>: Supera expectativas &nbsp;|&nbsp; &bull; <strong>2,8 a 3,7</strong>: Atende expectativas &nbsp;|&nbsp; &bull; <strong>2,0 a 2,7</strong>: Em desenvolvimento &nbsp;|&nbsp; &bull; <strong>1,0 a 1,9</strong>: Insatisfatório.') +
+      '<div class="table-card"><div class="toolbar"><span class="toolbar-title">Avaliações Registradas (' + avs.length + ')</span>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="avaliacao_form">+ Registrar Avaliação</button></div>' +
+      '<div class="table-scroll"><table class="tbl"><thead><tr><th>Colaborador</th><th>Ciclo / Período</th><th>Data</th>' +
+      COMPETENCIAS.map(function (c) { return '<th class="ctr">' + c[2] + '</th>'; }).join('') +
+      '<th class="ctr">Média</th><th>Conceito final</th><th class="num">Ações</th></tr></thead><tbody>' +
+      (avs.length ? avs.map(function (a) {
+        var m = calcMedia(a), q = conceito(m);
+        return '<tr><td><strong>' + esc(funcMap[a.funcionarioId] || 'Colaborador não identificado') + '</strong></td><td>' + esc(a.periodo || '-') + '</td><td>' + fmtDate(a.data) + '</td>' +
+          COMPETENCIAS.map(function (c) { return '<td class="ctr">' + esc(clamp(num(a[c[0]], 1), 1, 5)) + '</td>'; }).join('') +
+          '<td class="ctr" style="font-weight:700;">' + m.toFixed(2).replace('.', ',') + '</td><td><span class="tag ' + q.tag + '">' + q.texto + '</span></td>' +
+          '<td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="avaliacao_form" data-id="' + esc(a.id) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del-av" data-id="' + esc(a.id) + '">Excluir</button></td></tr>';
+      }).join('') : '<tr><td colspan="11" class="empty">Nenhuma avaliação lançada até o momento.</td></tr>') +
+      '</tbody></table></div></div>';
+  }
+
+  /* ---------- Feedbacks ---------- */
+  function fbsFiltered() {
+    var f = state.filters;
+    var list = arr(load(cid(), 'feedbacks', []));
+    if (f.fbType) list = list.filter(function (x) { return x.tipo === f.fbType; });
+    if (f.fbFunc) list = list.filter(function (x) { return x.funcionarioId === f.fbFunc; });
+    return list.slice().sort(function (a, b) { return String(b.data || '').localeCompare(String(a.data || '')); });
+  }
+  function modFeedbacks() {
+    var id = cid();
+    var all = arr(load(id, 'feedbacks', []));
+    var funcs = arr(load(id, 'funcionarios', []));
+    var funcMap = {};
+    funcs.forEach(function (f) { funcMap[f.id] = f.nome; });
+    var list = fbsFiltered();
+    return '<div class="table-card"><div class="toolbar"><div class="toolbar-group"><span class="toolbar-title">Histórico de Feedbacks (' + all.length + ')</span>' +
+      '<select class="sel" aria-label="Filtrar por tipo" data-filter="fbType"><option value="">Todos os Tipos</option>' +
+      ['Positivo', 'Construtivo', 'Reconhecimento'].map(function (t) { return '<option value="' + t + '" ' + sel(state.filters.fbType === t) + '>' + t + '</option>'; }).join('') + '</select>' +
+      '<select class="sel" aria-label="Filtrar por colaborador" data-filter="fbFunc"><option value="">Todos os Colaboradores</option>' +
+      funcs.map(function (f) { return '<option value="' + esc(f.id) + '" ' + sel(state.filters.fbFunc === f.id) + '>' + esc(f.nome) + '</option>'; }).join('') + '</select></div>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="feedback_form">+ Lançar Feedback</button></div>' +
+      '<div class="table-scroll"><table class="tbl"><thead><tr><th>Data</th><th>Colaborador</th><th>Tipo</th><th>Emissor / Liderança</th><th>Observações</th><th class="num">Ações</th></tr></thead><tbody>' +
+      (list.length ? list.map(function (fb) {
+        var tc = fb.tipo === 'Positivo' ? 'tag-green' : fb.tipo === 'Construtivo' ? 'tag-amber' : 'tag-blue';
+        return '<tr><td style="white-space:nowrap;">' + fmtDate(fb.data) + '</td><td><strong>' + esc(funcMap[fb.funcionarioId] || 'Não identificado') + '</strong></td>' +
+          '<td><span class="tag ' + tc + '">' + esc(fb.tipo) + '</span></td><td>' + esc(fb.autor || '-') + '</td>' +
+          '<td style="max-width:340px;white-space:normal;line-height:1.35;">' + esc(fb.descricao || '') + '</td>' +
+          '<td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="feedback_form" data-id="' + esc(fb.id) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del-fb" data-id="' + esc(fb.id) + '">Excluir</button></td></tr>';
+      }).join('') : '<tr><td colspan="6" class="empty">Nenhum feedback encontrado.</td></tr>') +
+      '</tbody></table></div></div>';
+  }
+
+  /* ---------- Políticas ---------- */
+  function modPoliticas() {
+    var pols = arr(load(cid(), 'politicas', []));
+    return '<div class="toolbar-group" style="justify-content:space-between;margin-bottom:12px;"><div>' +
+      '<h2 style="font-size:13px;font-weight:700;margin:0;text-transform:uppercase;">Manual Corporativo de Políticas e Normas Internas</h2>' +
+      '<div class="muted" style="font-size:11px;">Documentos de governança, conduta e diretrizes trabalhistas.</div></div>' +
+      '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="politica_form">+ Nova Política</button></div>' +
+      (pols.length ? '<div class="grid-pol">' + pols.map(function (p) {
+        return '<div class="card" style="margin-bottom:0;"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">' +
+          '<span class="tag tag-blue">' + esc(p.categoria || 'Geral') + '</span><div>' +
+          '<button class="btn btn-sm" data-action="open-modal" data-modal="politica_form" data-id="' + esc(p.id) + '">Editar</button> ' +
+          '<button class="btn btn-danger btn-sm" data-action="del-pol" data-id="' + esc(p.id) + '">Excluir</button></div></div>' +
+          '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">' + esc(p.titulo) + '</div><div class="pol-body">' + esc(p.conteudo) + '</div></div>';
+      }).join('') + '</div>' : '<div class="card muted" style="text-align:center;padding:24px;">Nenhuma política organizacional cadastrada até o momento.</div>');
+  }
+
+  /* =========================================================
+     MODAIS
+     ========================================================= */
+  function modalShell(title, body, foot, size) {
+    return '<div class="overlay" data-overlay><div class="modal ' + (size || '') + '" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+      '<div class="modal-head"><h2 class="modal-title">' + esc(title) + '</h2><button type="button" class="modal-x" data-action="close-modal" aria-label="Fechar">&times;</button></div>' +
+      body + '</div></div>';
+  }
+  function formModal(title, submit, body, okLabel, size, cancelAction, extra) {
+    return modalShell(title,
+      '<form data-submit="' + submit + '" ' + (extra || '') + '><div class="modal-body">' + body + '</div>' +
+      '<div class="modal-foot">' + (cancelAction || '<button type="button" class="btn" data-action="close-modal">Cancelar</button>') +
+      '<button type="submit" class="btn btn-primary">' + okLabel + '</button></div></form>', '', size);
+  }
+  function pwField(label, name, opts) {
+    opts = opts || {};
+    return '<div class="fg"><label class="fl">' + label + '</label><input type="password" class="inp w100" name="' + name + '" required ' +
+      (opts.min ? 'minlength="4" ' : '') + (opts.auto ? 'autocomplete="' + opts.auto + '" ' : '') + (opts.focus ? 'data-autofocus ' : '') + '></div>';
+  }
+  function companyName(id) {
+    var c = getIndex().filter(function (x) { return x.id === id; })[0];
+    return c ? c.nome : '';
+  }
+
+  function viewModal() {
+    if (!state.modal) return '';
+    var m = state.modal, d = state.modalData || {}, id = cid();
+
+    if (m === 'login_company') {
+      var hasAuth = !!load(d.id, 'auth', null);
+      return formModal(hasAuth ? 'Acesso seguro da empresa' : 'Definir senha da empresa', 'login',
+        '<input type="hidden" name="id" value="' + esc(d.id) + '"><div style="font-size:12px;margin-bottom:12px;">Empresa: <strong>' + esc(companyName(d.id)) + '</strong></div>' +
+        (hasAuth ? pwField('Senha de acesso do grupo', 'pass', { focus: 1, auto: 'current-password' }) :
+          '<div class="notice warn" style="margin:0 0 10px;">Esta empresa ainda não tem senha. Defina uma para continuar.</div>' +
+          pwField('Nova senha (mín. 4 caracteres)', 'pass', { min: 1, focus: 1, auto: 'new-password' }) + pwField('Confirmar senha', 'pass2', { min: 1, auto: 'new-password' })),
+        hasAuth ? 'Entrar no sistema' : 'Definir e entrar', 'sm');
+    }
+
+    if (m === 'create_company') {
+      return formModal('Criar nova empresa fictícia', 'create-company',
+        '<div class="row w21"><div class="fg"><label class="fl">Nome da organização</label><input class="inp w100" name="nome" required data-autofocus placeholder="Ex.: Innova Logística Integrada Ltda"></div>' +
+        '<div class="fg"><label class="fl">Segmento / ramo</label><input class="inp w100" name="segmento" required placeholder="Ex.: Logística / Varejo / TI"></div></div>' +
+        '<div class="row c3"><div class="fg"><label class="fl">Porte</label><select class="sel w100" name="porte"><option value="Pequena">Pequena Empresa</option><option value="Média" selected>Média Empresa</option><option value="Grande">Grande Empresa</option></select></div>' +
+        '<div class="fg"><label class="fl">Nº estimado de pessoas</label><input type="number" min="0" class="inp w100" name="num_func" value="45"></div>' +
+        '<div class="fg"><label class="fl">Ano de fundação</label><input type="number" min="1800" max="2100" class="inp w100" name="ano" value="2021"></div></div>' +
+        '<div class="fg"><label class="fl">Cidade / UF</label><input class="inp w100" name="cidade_uf" placeholder="Ex.: São Paulo/SP"></div>' +
+        '<div class="fg"><label class="fl">Breve descrição do negócio</label><textarea class="txt w100" name="descricao" rows="2" placeholder="Produtos, clientes ou serviços prestados..."></textarea></div>' +
+        '<div class="notice" style="margin-top:8px;"><strong>SENHA DO GRUPO (mín. 4 caracteres)</strong><div class="row c2" style="margin-top:6px;">' +
+        pwField('Senha de acesso', 'pass', { min: 1, auto: 'new-password' }) + pwField('Confirmar senha', 'pass2', { min: 1, auto: 'new-password' }) + '</div></div>',
+        'Concluir e criar empresa', 'lg');
+    }
+
+    if (m === 'rename_company') {
+      return formModal('Renomear empresa', 'rename-company',
+        '<input type="hidden" name="id" value="' + esc(d.id) + '"><div class="fg"><label class="fl">Novo nome da organização</label>' +
+        '<input class="inp w100" name="new_name" required data-autofocus value="' + esc(companyName(d.id)) + '"></div>', 'Gravar nome', 'sm');
+    }
+
+    if (m === 'delete_company') {
+      var hasA = !!load(d.id, 'auth', null);
+      return formModal('Excluir empresa', 'delete-company',
+        '<input type="hidden" name="id" value="' + esc(d.id) + '">' +
+        '<div class="notice danger" style="margin:0 0 10px;">Todos os cargos, colaboradores, avaliações, feedbacks e políticas de <strong>' + esc(companyName(d.id)) + '</strong> serão apagados em definitivo. Exporte um backup antes, se precisar.</div>' +
+        '<div class="fg"><label class="fl">Digite EXCLUIR para confirmar</label><input class="inp w100" name="word" required autocomplete="off" data-autofocus placeholder="EXCLUIR"></div>' +
+        (hasA ? pwField('Senha da empresa ou senha mestre', 'pass') : ''), 'Excluir definitivamente', 'sm', null, '');
+    }
+
+    if (m === 'master_panel') {
+      var master = getMaster(), companies = getIndex();
+      var body;
+      if (!master) {
+        return formModal('Painel do administrador / professor', 'master-setup',
+          '<div class="notice warn" style="margin:0 0 12px;"><strong>Primeiro acesso:</strong> ainda não há senha mestre neste navegador. Cadastre uma para poder redefinir o acesso dos grupos.</div>' +
+          '<div class="row c2">' + pwField('Definir senha mestre (mín. 4 caracteres)', 'mpass', { min: 1, focus: 1, auto: 'new-password' }) + pwField('Confirmar senha mestre', 'mpass2', { min: 1, auto: 'new-password' }) + '</div>',
+          'Cadastrar senha mestre', 'lg', '<button type="button" class="btn" data-action="close-modal">Fechar</button>');
+      }
+      body = '<div class="modal-body"><div class="toolbar-group" style="justify-content:space-between;margin-bottom:10px;"><div class="toolbar-title">Empresas registradas neste navegador</div>' +
+        '<button class="btn btn-sm" data-action="open-modal" data-modal="change_master_pass">Alterar senha mestre</button></div>' +
+        '<div class="table-scroll"><table class="tbl" style="margin-bottom:12px;"><thead><tr><th>Empresa</th><th>Criação</th><th class="num">Recuperação</th></tr></thead><tbody>' +
+        (companies.length ? companies.map(function (c) {
+          return '<tr><td><strong>' + esc(c.nome) + '</strong></td><td>' + esc(c.criadoEm || '-') + '</td><td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="reset_company_access" data-id="' + esc(c.id) + '">Redefinir acesso</button></td></tr>';
+        }).join('') : '<tr><td colspan="3" class="empty">Nenhuma empresa cadastrada.</td></tr>') + '</tbody></table></div>' +
+        '<div class="notice">A senha mestre protege contra redefinição por colegas no mesmo navegador. Os dados continuam salvos no navegador, não em servidor.</div></div>' +
+        '<div class="modal-foot"><button type="button" class="btn" data-action="close-modal">Fechar</button></div>';
+      return modalShell('Painel do administrador / professor', body, '', 'lg');
+    }
+
+    if (m === 'change_master_pass') {
+      return formModal('Alterar senha mestre', 'master-change',
+        pwField('Senha mestre atual', 'old_pass', { focus: 1 }) + pwField('Nova senha mestre', 'new_pass', { min: 1 }) + pwField('Confirmar nova senha', 'new_pass2', { min: 1 }),
+        'Gravar nova senha', 'sm', '<button type="button" class="btn" data-action="open-modal" data-modal="master_panel">Voltar</button>');
+    }
+
+    if (m === 'reset_company_access') {
+      return formModal('Redefinir acesso da empresa', 'reset-access',
+        '<input type="hidden" name="id" value="' + esc(d.id) + '"><div style="font-size:12px;margin-bottom:8px;">Empresa: <strong>' + esc(companyName(d.id)) + '</strong></div>' +
+        '<div class="notice danger" style="margin:0 0 10px;">Exige a palavra-chave e a senha mestre, para que só o instrutor consiga redefinir senhas esquecidas. Os dados da empresa são mantidos.</div>' +
+        '<div class="fg"><label class="fl">Digite a palavra REDEFINIR</label><input class="inp w100" name="word" required autocomplete="off" data-autofocus placeholder="REDEFINIR"></div>' +
+        pwField('Senha mestre do professor', 'master_pass') +
+        '<div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">' + pwField('Nova senha para o grupo (mín. 4 caracteres)', 'new_pass', { min: 1 }) + pwField('Confirmar nova senha', 'new_pass2', { min: 1 }) + '</div>',
+        'Redefinir senha do grupo', '', '<button type="button" class="btn" data-action="open-modal" data-modal="master_panel">Cancelar</button>');
+    }
+
+    if (m === 'change_pass_inside') {
+      return formModal('Alterar senha do workspace', 'change-pass',
+        pwField('Senha atual', 'current_pass', { focus: 1 }) + pwField('Nova senha (mín. 4 caracteres)', 'n1', { min: 1 }) + pwField('Confirmar nova senha', 'n2', { min: 1 }),
+        'Gravar nova senha', 'sm');
+    }
+
+    if (m === 'faixa_form') {
+      var tabX = getTabela();
+      var ex = (d.id ? tabX.faixas.filter(function (x) { return x.id === d.id; })[0] : null) || { steps: [] };
+      var cargosX = arr(load(id, 'cargos', []));
+      return formModal(d.id ? 'Editar faixa salarial' : 'Nova faixa salarial', 'save-faixa',
+        '<input type="hidden" name="faixa_id" value="' + esc(ex.id || '') + '">' +
+        '<div class="row c2"><div class="fg"><label class="fl">Faixa / grau</label><input class="inp w100" name="grau" required data-autofocus value="' + esc(ex.grau || '') + '" placeholder="Ex.: Nível 1"></div>' +
+        '<div class="fg"><label class="fl">Cargo vinculado (opcional)</label><select class="sel w100" name="cargo_id"><option value="">Sem vínculo</option>' +
+        cargosX.map(function (c) { return '<option value="' + esc(c.id) + '" ' + sel(ex.cargoId === c.id) + '>' + esc(c.nome) + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="fg"><label class="fl">Descrição</label><input class="inp w100" name="descricao" value="' + esc(ex.descricao || '') + '" placeholder="Ex.: Assistentes e auxiliares administrativos"></div>' +
+        '<div class="gen-box"><div><label class="fl">Valor inicial (Step A)</label><input type="number" min="0" step="0.01" class="inp w100" name="gen_base" placeholder="Ex.: 2500"></div>' +
+        '<div><label class="fl">Progressão entre steps (%)</label><input type="number" min="0" step="0.01" class="inp w100" name="gen_pct" value="5"></div>' +
+        '<button type="button" class="btn btn-sm" data-action="gen-steps">Gerar steps</button></div>' +
+        '<label class="fl">Valores dos steps (R$)</label><div class="steps-grid">' +
+        STEP_LABELS.map(function (l, i) {
+          return '<div><label class="fl" style="font-size:10px;text-transform:none;">Step ' + l + '</label><input type="number" min="0" step="0.01" class="inp w100" name="step' + i + '" required value="' + esc(ex.steps[i] ? ex.steps[i] : '') + '"></div>';
+        }).join('') + '</div><div class="hint">Os steps devem ser crescentes (cada um maior ou igual ao anterior).</div>',
+        'Gravar faixa', 'lg');
+    }
+
+    if (m === 'reajuste_form') {
+      return formModal('Aplicar reajuste na tabela salarial', 'save-reajuste',
+        '<div class="fg"><label class="fl">Percentual de reajuste (%)</label><input type="number" step="0.01" class="inp w100" name="pct" required data-autofocus placeholder="Ex.: 4.5"></div>' +
+        '<label class="check-inline"><input type="checkbox" name="cargos"> Aplicar o mesmo percentual ao piso e ao teto dos cargos</label>' +
+        '<div class="notice warn">Todos os steps de todas as faixas serão multiplicados pelo percentual (valores negativos reduzem). Os valores são arredondados em centavos. Exporte um backup antes se quiser guardar a versão atual.</div>',
+        'Aplicar reajuste', 'sm');
+    }
+
+    if (m === 'export_pdf') {
+      return formModal('Exportar dados em PDF', 'export-pdf',
+        '<p class="muted" style="margin:0 0 10px;font-size:12px;line-height:1.5;">Marque as guias que entrarão no PDF. Ao confirmar, abre a janela de impressão do navegador: escolha <strong>Salvar como PDF</strong> como destino.</p>' +
+        '<div class="toolbar-group" style="margin-bottom:8px;"><button type="button" class="btn btn-sm" data-action="export-all">Marcar todas</button><button type="button" class="btn btn-sm" data-action="export-none">Limpar seleção</button></div>' +
+        '<div class="check-list">' + TABS.map(function (t) {
+          return '<label><input type="checkbox" name="tabs" value="' + t[0] + '" ' + (t[0] === state.tab ? 'checked' : '') + '> ' + esc(t[1]) + '</label>';
+        }).join('') + '</div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">Orientação da página</label><select class="sel w100" name="orient"><option value="landscape">Paisagem (melhor para tabelas)</option><option value="portrait">Retrato</option></select></div>' +
+        '<div class="fg"><label class="fl">Opções</label><label class="check-inline"><input type="checkbox" name="fotos" checked> Incluir fotos dos colaboradores</label></div></div>' +
+        '<div class="hint">Os filtros da tela não valem para o PDF: cada guia sai completa.</div>',
+        'Gerar PDF', '');
+    }
+
+    if (m === 'valor_form') {
+      return formModal('Novo valor corporativo', 'save-valor',
+        '<div class="fg"><label class="fl">Princípio / valor</label><input class="inp w100" name="valor" required data-autofocus placeholder="Ex.: Ética e transparência"></div>', 'Adicionar', 'sm');
+    }
+
+    if (m === 'confirm') {
+      return formModal(d.title || 'Confirmar', 'confirm',
+        '<div style="font-size:12.5px;line-height:1.5;">' + esc(d.message) + '</div>' +
+        (d.word ? '<div class="fg" style="margin-top:12px;"><label class="fl">Digite ' + esc(d.word) + ' para confirmar</label><input class="inp w100" name="word" required autocomplete="off" data-autofocus></div>' : ''),
+        d.label || 'Confirmar', 'sm', null, 'data-danger="' + (d.danger ? '1' : '') + '"').replace('btn btn-primary">' + esc(d.label || 'Confirmar'), (d.danger ? 'btn btn-danger solid' : 'btn btn-primary') + '">' + esc(d.label || 'Confirmar'));
+    }
+
+    if (m === 'cargo_form') {
+      var e = d.id ? arr(load(id, 'cargos', [])).filter(function (c) { return c.id === d.id; })[0] : null;
+      e = e || {};
+      return formModal(d.id ? 'Editar cargo' : 'Novo cargo', 'save-cargo',
+        '<input type="hidden" name="cargo_id" value="' + esc(e.id || '') + '">' +
+        '<div class="fg"><label class="fl">Título do cargo</label><input class="inp w100" name="nome" required data-autofocus value="' + esc(e.nome || '') + '" placeholder="Ex.: Analista Financeiro Júnior"></div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">Setor / departamento</label><input class="inp w100" name="setor" required value="' + esc(e.setor || '') + '" placeholder="Ex.: Financeiro"></div>' +
+        '<div class="fg"><label class="fl">Nível hierárquico</label><select class="sel w100" name="nivel">' +
+        ['Operacional', 'Supervisão', 'Gerência', 'Diretoria'].map(function (n) { return '<option ' + sel(e.nivel === n) + '>' + n + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="fg"><label class="fl">Código CBO (opcional)</label><input class="inp w100" name="cbo" value="' + esc(e.cbo || '') + '" placeholder="Ex.: 4110-10"></div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">Piso salarial (R$)</label><input type="number" min="0" step="0.01" class="inp w100" name="piso" value="' + esc(e.piso ?? 2000) + '"></div>' +
+        '<div class="fg"><label class="fl">Teto salarial (R$)</label><input type="number" min="0" step="0.01" class="inp w100" name="teto" value="' + esc(e.teto ?? 3500) + '"></div></div>',
+        'Gravar cargo', '');
+    }
+
+    if (m === 'func_form') {
+      var cargos = arr(load(id, 'cargos', []));
+      var tabF = getTabela();
+      var ef = (d.id ? arr(load(id, 'funcionarios', [])).filter(function (f) { return f.id === d.id; })[0] : null) || {};
+      var foto = isPhoto(ef.foto) ? ef.foto : '';
+      var noCargo = cargos.length === 0;
+      return formModal(d.id ? 'Editar colaborador' : 'Novo colaborador', 'save-func',
+        (noCargo ? '<div class="notice warn" style="margin:0 0 10px;">Cadastre ao menos um cargo antes de incluir colaboradores.</div>' : '') +
+        '<input type="hidden" name="func_id" value="' + esc(ef.id || '') + '"><input type="hidden" name="foto" value="' + esc(foto) + '">' +
+        '<div class="photo-row"><div class="photo-preview" data-photo-preview>' + (foto ? '<img alt="Foto do colaborador" src="' + esc(foto) + '">' : '<span>Sem foto</span>') + '</div>' +
+        '<div><div class="photo-actions"><label class="btn btn-sm" for="foto-file">Escolher foto</label>' +
+        '<input type="file" id="foto-file" accept="image/*" class="hidden" data-on="foto-file">' +
+        '<button type="button" class="btn btn-danger btn-sm" data-action="remove-photo">Remover foto</button></div>' +
+        '<div class="hint" style="margin-top:6px;">JPG, PNG ou WebP. A imagem é recortada em quadrado e reduzida (240 px) para ocupar pouco espaço no navegador.</div></div></div>' +
+        '<div class="fg"><label class="fl">Nome completo</label><input class="inp w100" name="nome" required data-autofocus value="' + esc(ef.nome || '') + '"></div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">CPF (fictício)</label><input class="inp w100" name="cpf" value="' + esc(ef.cpf || '') + '" placeholder="000.000.000-00"></div>' +
+        '<div class="fg"><label class="fl">Data de admissão</label><input type="date" class="inp w100" name="admissao" required value="' + esc(ef.admissao || todayISO()) + '"></div></div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">Cargo vinculado</label><select class="sel w100" name="cargo_id" required data-on="cargo-select"><option value="">Selecione o cargo...</option>' +
+        cargos.map(function (c) { return '<option value="' + esc(c.id) + '" data-setor="' + esc(c.setor || '') + '" ' + sel(ef.cargoId === c.id) + '>' + esc(c.nome) + ' (' + esc(c.setor) + ')</option>'; }).join('') + '</select></div>' +
+        '<div class="fg"><label class="fl">Setor / lotação</label><input class="inp w100" name="setor" value="' + esc(ef.setor || '') + '" placeholder="Preenchido pelo cargo, se vazio"></div></div>' +
+        '<div class="row w21"><div class="fg"><label class="fl">Enquadramento salarial (faixa)</label><select class="sel w100" name="faixa_id"' + (tabF.faixas.length ? '' : ' disabled') + '><option value="">' + (tabF.faixas.length ? 'Sem enquadramento' : 'Cadastre faixas na Tabela Salarial') + '</option>' +
+        tabF.faixas.map(function (x) { return '<option value="' + esc(x.id) + '" data-cargo="' + esc(x.cargoId) + '" ' + sel(ef.faixaId === x.id) + '>' + esc(x.grau) + (x.descricao ? ' — ' + esc(x.descricao) : '') + '</option>'; }).join('') + '</select></div>' +
+        '<div class="fg"><label class="fl">Step</label><select class="sel w100" name="step"' + (tabF.faixas.length ? '' : ' disabled') + '>' +
+        STEP_LABELS.map(function (l, i) { return '<option value="' + i + '" ' + sel((parseInt(ef.step, 10) || 0) === i) + '>Step ' + l + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="fg"><label class="fl">Status funcional</label><select class="sel w100" name="status">' +
+        [['Ativo', 'Ativo'], ['Inativo', 'Inativo / Desligado'], ['Afastado', 'Afastado (licença)']].map(function (s) { return '<option value="' + s[0] + '" ' + sel((ef.status || 'Ativo') === s[0]) + '>' + s[1] + '</option>'; }).join('') + '</select></div>',
+        'Gravar colaborador', '').replace(noCargo ? 'btn btn-primary">Gravar' : '@@', 'btn btn-primary" disabled>Gravar');
+    }
+
+    if (m === 'avaliacao_form') {
+      var funcs = arr(load(id, 'funcionarios', []));
+      var ea = (d.id ? arr(load(id, 'avaliacoes', [])).filter(function (a) { return a.id === d.id; })[0] : null) || {};
+      var noF = funcs.length === 0;
+      return formModal(d.id ? 'Editar avaliação de desempenho' : 'Lançar avaliação de desempenho', 'save-av',
+        (noF ? '<div class="notice warn" style="margin:0 0 10px;">Cadastre ao menos um colaborador antes de lançar avaliações.</div>' : '') +
+        '<input type="hidden" name="av_id" value="' + esc(ea.id || '') + '">' +
+        '<div class="row w211"><div class="fg"><label class="fl">Colaborador avaliado</label><select class="sel w100" name="funcionario_id" required><option value="">Selecione...</option>' +
+        funcs.map(function (f) { return '<option value="' + esc(f.id) + '" ' + sel(ea.funcionarioId === f.id) + '>' + esc(f.nome) + (f.setor ? ' (' + esc(f.setor) + ')' : '') + '</option>'; }).join('') + '</select></div>' +
+        '<div class="fg"><label class="fl">Ciclo / período</label><input class="inp w100" name="periodo" required value="' + esc(ea.periodo || 'Ciclo ' + new Date().getFullYear() + '/1') + '"></div>' +
+        '<div class="fg"><label class="fl">Data</label><input type="date" class="inp w100" name="data" required value="' + esc(ea.data || todayISO()) + '"></div></div>' +
+        '<div class="notice" style="margin:6px 0 12px;"><strong>PONTUAÇÃO DE COMPETÊNCIAS (1 A 5)</strong><div class="row c5" style="margin-top:8px;text-align:center;">' +
+        COMPETENCIAS.map(function (c) {
+          return '<div><label class="fl" style="font-size:10px;">' + c[1] + '</label><input type="number" min="1" max="5" step="0.5" name="n_' + c[0] + '" class="inp w100" style="text-align:center;" value="' + esc(ea[c[0]] ?? 4) + '" required data-on="av-score"></div>';
+        }).join('') + '</div><div class="avg-preview" data-avg></div></div>' +
+        '<div class="fg"><label class="fl">Parecer qualitativo / justificativa</label><textarea class="txt w100" name="observacoes" rows="3" placeholder="Pontos fortes e oportunidades de melhoria para o plano de desenvolvimento...">' + esc(ea.observacoes || '') + '</textarea></div>',
+        'Gravar avaliação', 'lg').replace(noF ? 'btn btn-primary">Gravar' : '@@', 'btn btn-primary" disabled>Gravar');
+    }
+
+    if (m === 'feedback_form') {
+      var fs = arr(load(id, 'funcionarios', []));
+      var eb = (d.id ? arr(load(id, 'feedbacks', [])).filter(function (x) { return x.id === d.id; })[0] : null) || {};
+      var noFs = fs.length === 0;
+      return formModal(d.id ? 'Editar feedback' : 'Lançar feedback', 'save-fb',
+        (noFs ? '<div class="notice warn" style="margin:0 0 10px;">Cadastre ao menos um colaborador antes de lançar feedbacks.</div>' : '') +
+        '<input type="hidden" name="fb_id" value="' + esc(eb.id || '') + '">' +
+        '<div class="fg"><label class="fl">Colaborador vinculado</label><select class="sel w100" name="funcionario_id" required><option value="">Selecione...</option>' +
+        fs.map(function (f) { return '<option value="' + esc(f.id) + '" ' + sel(eb.funcionarioId === f.id) + '>' + esc(f.nome) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="row c2"><div class="fg"><label class="fl">Data</label><input type="date" class="inp w100" name="data" required value="' + esc(eb.data || todayISO()) + '"></div>' +
+        '<div class="fg"><label class="fl">Tipo de feedback</label><select class="sel w100" name="tipo">' +
+        ['Positivo', 'Construtivo', 'Reconhecimento'].map(function (t) { return '<option ' + sel(eb.tipo === t) + '>' + t + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="fg"><label class="fl">Autor / liderança responsável</label><input class="inp w100" name="autor" required value="' + esc(eb.autor || '') + '" placeholder="Ex.: Gerência de Gente e Gestão"></div>' +
+        '<div class="fg"><label class="fl">Descrição dos fatos e orientações</label><textarea class="txt w100" name="descricao" rows="4" required placeholder="Contexto, comportamento observado e impacto gerado...">' + esc(eb.descricao || '') + '</textarea></div>',
+        'Gravar feedback', '').replace(noFs ? 'btn btn-primary">Gravar' : '@@', 'btn btn-primary" disabled>Gravar');
+    }
+
+    if (m === 'politica_form') {
+      var ep = (d.id ? arr(load(id, 'politicas', [])).filter(function (p) { return p.id === d.id; })[0] : null) || {};
+      var cats = [['Jornada de Trabalho', 'Jornada de Trabalho'], ['Férias', 'Férias'], ['Comportamento', 'Comportamento e Ética'], ['Prevenção', 'Prevenção e Segurança (SST)'], ['Geral', 'Diretrizes Gerais']];
+      return formModal(d.id ? 'Editar política organizacional' : 'Nova política organizacional', 'save-pol',
+        '<input type="hidden" name="pol_id" value="' + esc(ep.id || '') + '">' +
+        '<div class="row w21"><div class="fg"><label class="fl">Título da norma / política</label><input class="inp w100" name="titulo" required data-autofocus value="' + esc(ep.titulo || '') + '" placeholder="Ex.: Diretrizes para concessão e escala de férias"></div>' +
+        '<div class="fg"><label class="fl">Categoria</label><select class="sel w100" name="categoria">' +
+        cats.map(function (c) { return '<option value="' + c[0] + '" ' + sel((ep.categoria || 'Geral') === c[0]) + '>' + c[1] + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="fg"><label class="fl">Conteúdo do documento normativo</label><textarea class="txt w100" name="conteudo" rows="8" required placeholder="Texto formal da política: regras, responsabilidades e procedimentos...">' + esc(ep.conteudo || '') + '</textarea></div>',
+        'Gravar política', 'lg');
+    }
+    return '';
+  }
+
+  /* =========================================================
+     RENDERIZAÇÃO
+     ========================================================= */
+  function renderApp() {
+    var root = document.getElementById('app');
+    root.innerHTML = cid() ? viewWorkspace() : viewSelect();
+    document.title = 'Plataforma Maker — Simulação de RH';
+  }
+  function renderModule() {
+    var el = document.getElementById('module');
+    if (el) el.innerHTML = viewModule(); else renderApp();
+  }
+  function renderModal() {
+    var root = document.getElementById('modal-root');
+    root.innerHTML = viewModal();
+    if (state.modal) {
+      var first = root.querySelector('[data-autofocus]') || root.querySelector('input:not([type=hidden]), select, textarea');
+      if (first) first.focus();
+      var avg = root.querySelector('[data-avg]');
+      if (avg) updateAvg(root.querySelector('form'));
+    }
+  }
+  function refresh() { renderApp(); renderModal(); }
+
+  function openModal(name, data) { state.modal = name; state.modalData = data || {}; renderModal(); }
+  function closeModal() { state.modal = null; state.modalData = {}; renderModal(); }
+  function askConfirm(opts) { openModal('confirm', opts); }
+
+  function updateAvg(form) {
+    if (!form) return;
+    var av = {};
+    COMPETENCIAS.forEach(function (c) { av[c[0]] = form.elements['n_' + c[0]].value; });
+    var m = calcMedia(av), q = conceito(m);
+    var out = form.querySelector('[data-avg]');
+    if (out) out.innerHTML = 'Média: <strong>' + m.toFixed(2).replace('.', ',') + '</strong> — <span class="tag ' + q.tag + '">' + q.texto + '</span>';
+  }
+
+  /* =========================================================
+     AÇÕES (cliques)
+     ========================================================= */
+  function inCompany(key) { return arr(load(cid(), key, [])); }
+
+  var actions = {
+    'open-modal': function (el) { openModal(el.dataset.modal, el.dataset.id ? { id: el.dataset.id } : {}); },
+    'close-modal': function () { closeModal(); },
+    'set-tab': function (el) { state.tab = el.dataset.tab; resetFilters(); renderApp(); window.scrollTo(0, 0); },
+    'exit-company': function () { state.companyId = null; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters(); refresh(); },
+    'toggle-didactic': function (el) {
+      var box = document.getElementById(el.dataset.target);
+      if (!box) return;
+      box.classList.toggle('collapsed');
+      el.setAttribute('aria-expanded', box.classList.contains('collapsed') ? 'false' : 'true');
+    },
+    'select-cargo': function (el) { state.analiseCargoId = el.dataset.id; renderModule(); },
+    'gen-steps': function (el) {
+      var f = el.closest('form');
+      var base = parseFloat(f.elements.gen_base.value), pct = parseFloat(f.elements.gen_pct.value);
+      if (!isFinite(base) || base <= 0) return toast('Informe o valor inicial para gerar os steps.', true);
+      if (!isFinite(pct) || pct < 0) pct = 0;
+      for (var i = 0; i < N_STEPS; i++) f.elements['step' + i].value = (Math.round(base * Math.pow(1 + pct / 100, i) * 100) / 100).toFixed(2);
+    },
+    'remove-photo': function (el) { var f = el.closest('form'); f.elements.foto.value = ''; previewPhoto(f); },
+    'export-all': function (el) { setAllTabs(el.closest('form'), true); },
+    'export-none': function (el) { setAllTabs(el.closest('form'), false); },
+    'del-faixa': function (el) {
+      var fId = el.dataset.id, id = cid();
+      var fx = getTabela().faixas.filter(function (x) { return x.id === fId; })[0];
+      var n = inCompany('funcionarios').filter(function (f) { return f.faixaId === fId; }).length;
+      askConfirm({
+        title: 'Excluir faixa salarial', danger: true, label: 'Excluir',
+        message: 'Excluir a faixa "' + (fx ? fx.grau : '') + '"?' + (n ? ' ' + n + ' colaborador(es) ficarão sem enquadramento salarial.' : ''),
+        run: function () {
+          var tb = getTabela(); tb.faixas = tb.faixas.filter(function (x) { return x.id !== fId; }); save(id, 'tabela', tb);
+          save(id, 'funcionarios', inCompany('funcionarios').map(function (f) { if (f.faixaId === fId) { f.faixaId = ''; f.step = 0; } return f; }));
+          closeModal(); renderModule();
+        }
+      });
+    },
+    'import': function () { document.getElementById('import-file').click(); },
+    'export': exportCompany,
+
+    'reset-data': function () {
+      askConfirm({
+        title: 'Redefinir dados da empresa', danger: true, label: 'Apagar dados', word: 'REDEFINIR',
+        message: 'Isso apaga cargos, fichas de cargo, faixas da tabela salarial, colaboradores, avaliações, feedbacks e políticas desta empresa. O perfil, a missão e a senha são mantidos. A ação não pode ser desfeita.',
+        run: function () {
+          var id = cid();
+          save(id, 'cargos', []); save(id, 'analises', {}); save(id, 'funcionarios', []);
+          save(id, 'avaliacoes', []); save(id, 'feedbacks', []); save(id, 'politicas', []);
+          var tbR = getTabela(); tbR.faixas = []; save(id, 'tabela', tbR);
+          state.analiseCargoId = null;
+          closeModal(); renderApp(); toast('Dados operacionais da empresa foram limpos.');
+        }
+      });
+    },
+
+    'del-valor': function (el) {
+      var i = parseInt(el.dataset.index, 10), id = cid();
+      var mv = load(id, 'missao', {}) || {};
+      var v = arr(mv.valores)[i];
+      askConfirm({
+        title: 'Remover valor', label: 'Remover', danger: true, message: 'Remover o valor "' + v + '"?',
+        run: function () { mv.valores = arr(mv.valores).filter(function (_, k) { return k !== i; }); save(id, 'missao', mv); closeModal(); renderModule(); }
+      });
+    },
+
+    'del-cargo': function (el) {
+      var id = cid(), cId = el.dataset.id;
+      var cargo = inCompany('cargos').filter(function (c) { return c.id === cId; })[0];
+      var vinc = inCompany('funcionarios').filter(function (f) { return f.cargoId === cId; });
+      if (vinc.length) {
+        askConfirm({
+          title: 'Cargo em uso', label: 'Entendi', message: 'O cargo "' + (cargo ? cargo.nome : '') + '" tem ' + vinc.length + ' colaborador(es) vinculado(s). Edite esses colaboradores para outro cargo antes de excluir.',
+          run: function () { closeModal(); }
+        });
+        return;
+      }
+      askConfirm({
+        title: 'Excluir cargo', danger: true, label: 'Excluir', message: 'Excluir o cargo "' + (cargo ? cargo.nome : '') + '" e a sua ficha de descrição?',
+        run: function () {
+          save(id, 'cargos', inCompany('cargos').filter(function (c) { return c.id !== cId; }));
+          var an = load(id, 'analises', {}) || {}; delete an[cId]; save(id, 'analises', an);
+          var tbC = getTabela(); tbC.faixas.forEach(function (x) { if (x.cargoId === cId) x.cargoId = ''; }); save(id, 'tabela', tbC);
+          if (state.analiseCargoId === cId) state.analiseCargoId = null;
+          closeModal(); renderModule();
+        }
+      });
+    },
+
+    'del-func': function (el) {
+      var id = cid(), fId = el.dataset.id;
+      var f = inCompany('funcionarios').filter(function (x) { return x.id === fId; })[0];
+      var nAv = inCompany('avaliacoes').filter(function (a) { return a.funcionarioId === fId; }).length;
+      var nFb = inCompany('feedbacks').filter(function (a) { return a.funcionarioId === fId; }).length;
+      askConfirm({
+        title: 'Excluir colaborador', danger: true, label: 'Excluir',
+        message: 'Excluir "' + (f ? f.nome : '') + '"? Também serão removidas ' + nAv + ' avaliação(ões) e ' + nFb + ' feedback(s) deste colaborador.',
+        run: function () {
+          save(id, 'funcionarios', inCompany('funcionarios').filter(function (x) { return x.id !== fId; }));
+          save(id, 'avaliacoes', inCompany('avaliacoes').filter(function (x) { return x.funcionarioId !== fId; }));
+          save(id, 'feedbacks', inCompany('feedbacks').filter(function (x) { return x.funcionarioId !== fId; }));
+          closeModal(); renderModule();
+        }
+      });
+    },
+
+    'del-av': function (el) { delSimple('avaliacoes', el.dataset.id, 'Excluir avaliação', 'Excluir esta avaliação de desempenho?'); },
+    'del-fb': function (el) { delSimple('feedbacks', el.dataset.id, 'Excluir feedback', 'Excluir este registro de feedback?'); },
+    'del-pol': function (el) { delSimple('politicas', el.dataset.id, 'Excluir política', 'Remover esta política organizacional?'); }
+  };
+  function delSimple(key, itemId, title, msg) {
+    askConfirm({
+      title: title, message: msg, danger: true, label: 'Excluir',
+      run: function () { save(cid(), key, inCompany(key).filter(function (x) { return x.id !== itemId; })); closeModal(); renderModule(); }
+    });
+  }
+
+  /* =========================================================
+     FORMULÁRIOS (envio)
+     ========================================================= */
+  function val(f, n) { return (f.elements[n] ? f.elements[n].value : '').trim(); }
+  function upsert(key, item) {
+    var l = inCompany(key), i = l.findIndex(function (x) { return x.id === item.id; });
+    if (i >= 0) l[i] = item; else l.push(item);
+    save(cid(), key, l);
+  }
+
+  var submits = {
+    'login': async function (f) {
+      var id = val(f, 'id'), pass = val(f, 'pass');
+      var auth = load(id, 'auth', null);
+      if (auth) {
+        if (!(await checkAuth(auth, pass))) { toast('Senha incorreta. Tente novamente.', true); f.elements.pass.select(); return; }
+      } else {
+        if (pass.length < 4) return toast('A senha deve ter no mínimo 4 caracteres.', true);
+        if (pass !== val(f, 'pass2')) return toast('A confirmação de senha não confere.', true);
+        save(id, 'auth', await makeAuth(pass));
+      }
+      state.companyId = id; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters();
+      state.modal = null; refresh();
+    },
+
+    'create-company': async function (f) {
+      var nome = val(f, 'nome'), p1 = f.elements.pass.value, p2 = f.elements.pass2.value;
+      if (!nome) return toast('Informe o nome da empresa.', true);
+      if (p1.length < 4) return toast('A senha deve ter no mínimo 4 caracteres.', true);
+      if (p1 !== p2) return toast('A confirmação de senha não confere.', true);
+      var id = uid('emp');
+      var meta = { id: id, nome: nome, segmento: val(f, 'segmento') || 'Serviços Gerais', porte: f.elements.porte.value || 'Pequena', criadoEm: new Date().toLocaleDateString('pt-BR') };
+      var idx = getIndex(); idx.push(meta); setIndex(idx);
+      save(id, 'auth', await makeAuth(p1));
+      save(id, 'empresa', {
+        id: id, nome: nome, cnpj: '00.000.000/0001-00', segmento: meta.segmento, porte: meta.porte,
+        numFuncionariosEstimado: parseInt(f.elements.num_func.value, 10) || 10, cidadeUf: val(f, 'cidade_uf') || 'Brasil',
+        anoFundacao: parseInt(f.elements.ano.value, 10) || new Date().getFullYear(),
+        descricao: val(f, 'descricao') || 'Empresa fictícia criada para simulação didática de RH.'
+      });
+      save(id, 'missao', { missao: 'Prover produtos e serviços de excelência valorizando colaboradores e clientes.', visao: 'Ser referência ética no setor.', valores: ['Transparência', 'Respeito', 'Foco no Cliente'] });
+      ['cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas'].forEach(function (k) { save(id, k, []); });
+      save(id, 'analises', {});
+      state.companyId = id; state.tab = 'dashboard'; resetFilters(); state.modal = null; refresh();
+      toast('Empresa "' + nome + '" criada. Acesso liberado.');
+    },
+
+    'rename-company': function (f) {
+      var id = val(f, 'id'), nome = val(f, 'new_name');
+      if (!nome) return;
+      var idx = getIndex(), it = idx.filter(function (c) { return c.id === id; })[0];
+      if (it) it.nome = nome;
+      setIndex(idx);
+      var emp = load(id, 'empresa', {}) || {}; emp.nome = nome; save(id, 'empresa', emp);
+      closeModal(); renderApp();
+    },
+
+    'delete-company': async function (f) {
+      var id = val(f, 'id');
+      if (f.elements.word.value.trim() !== 'EXCLUIR') return toast('Digite exatamente a palavra EXCLUIR.', true);
+      var auth = load(id, 'auth', null);
+      if (auth) {
+        var p = f.elements.pass.value;
+        var ok = (await checkAuth(auth, p)) || (getMaster() && (await checkMaster(p)));
+        if (!ok) return toast('Senha incorreta. Use a senha da empresa ou a senha mestre.', true);
+      }
+      var nome = companyName(id);
+      wipeCompany(id);
+      if (state.companyId === id) state.companyId = null;
+      closeModal(); renderApp(); toast('Empresa "' + nome + '" excluída.');
+    },
+
+    'master-setup': async function (f) {
+      var p1 = f.elements.mpass.value, p2 = f.elements.mpass2.value;
+      if (p1.length < 4) return toast('A senha mestre deve ter pelo menos 4 caracteres.', true);
+      if (p1 !== p2) return toast('As senhas não conferem.', true);
+      writeJson(KEY_MASTER, await makeAuth(p1));
+      toast('Senha mestre definida.'); openModal('master_panel');
+    },
+
+    'master-change': async function (f) {
+      if (!(await checkMaster(f.elements.old_pass.value))) return toast('Senha mestre atual incorreta.', true);
+      var p1 = f.elements.new_pass.value, p2 = f.elements.new_pass2.value;
+      if (p1.length < 4) return toast('A nova senha deve ter no mínimo 4 caracteres.', true);
+      if (p1 !== p2) return toast('A confirmação da nova senha não confere.', true);
+      writeJson(KEY_MASTER, await makeAuth(p1));
+      toast('Senha mestre alterada.'); openModal('master_panel');
+    },
+
+    'reset-access': async function (f) {
+      var id = val(f, 'id');
+      if (f.elements.word.value.trim() !== 'REDEFINIR') return toast('Digite exatamente a palavra REDEFINIR.', true);
+      if (!(await checkMaster(f.elements.master_pass.value))) return toast('Senha mestre incorreta. Acesso não autorizado.', true);
+      var n1 = f.elements.new_pass.value, n2 = f.elements.new_pass2.value;
+      if (n1.length < 4) return toast('A nova senha deve ter no mínimo 4 caracteres.', true);
+      if (n1 !== n2) return toast('A confirmação da nova senha não confere.', true);
+      save(id, 'auth', await makeAuth(n1));
+      toast('Acesso redefinido. A nova senha já vale, sem perda de dados.'); openModal('master_panel');
+    },
+
+    'change-pass': async function (f) {
+      var id = cid(), auth = load(id, 'auth', null);
+      if (auth && !(await checkAuth(auth, f.elements.current_pass.value))) return toast('Senha atual incorreta.', true);
+      var n1 = f.elements.n1.value, n2 = f.elements.n2.value;
+      if (n1.length < 4) return toast('A nova senha precisa de pelo menos 4 caracteres.', true);
+      if (n1 !== n2) return toast('A confirmação não confere.', true);
+      save(id, 'auth', await makeAuth(n1));
+      closeModal(); toast('Senha da empresa alterada.');
+    },
+
+    'confirm': function (f) {
+      var d = state.modalData;
+      if (d.word && f.elements.word.value.trim() !== d.word) return toast('Digite exatamente ' + d.word + '.', true);
+      if (typeof d.run === 'function') d.run();
+    },
+
+    'save-empresa': function (f) {
+      var id = cid(), emp = load(id, 'empresa', {}) || {};
+      emp.nome = val(f, 'nome'); emp.cnpj = val(f, 'cnpj'); emp.segmento = val(f, 'segmento'); emp.porte = f.elements.porte.value;
+      emp.numFuncionariosEstimado = parseInt(f.elements.num_func.value, 10) || 0;
+      emp.cidadeUf = val(f, 'cidade_uf'); emp.anoFundacao = parseInt(f.elements.ano.value, 10) || 2020; emp.descricao = val(f, 'descricao');
+      save(id, 'empresa', emp);
+      var idx = getIndex(), it = idx.filter(function (c) { return c.id === id; })[0];
+      if (it) { it.nome = emp.nome; it.segmento = emp.segmento; it.porte = emp.porte; setIndex(idx); }
+      renderApp(); toast('Perfil da empresa atualizado.');
+    },
+
+    'save-missao': function (f) {
+      var id = cid(), mv = load(id, 'missao', {}) || {};
+      mv.missao = val(f, 'missao'); mv.visao = val(f, 'visao'); mv.valores = arr(mv.valores);
+      save(id, 'missao', mv); toast('Missão e visão atualizadas.');
+    },
+
+    'save-valor': function (f) {
+      var id = cid(), mv = load(id, 'missao', {}) || {};
+      mv.valores = arr(mv.valores); mv.valores.push(val(f, 'valor'));
+      save(id, 'missao', mv); closeModal(); renderModule();
+    },
+
+    'save-cargo': function (f) {
+      var piso = num(f.elements.piso.value), teto = num(f.elements.teto.value);
+      if (teto < piso) return toast('O teto salarial não pode ser menor que o piso.', true);
+      upsert('cargos', { id: val(f, 'cargo_id') || uid('cg'), nome: val(f, 'nome'), setor: val(f, 'setor'), nivel: f.elements.nivel.value, cbo: val(f, 'cbo'), piso: piso, teto: teto });
+      closeModal(); renderModule();
+    },
+
+    'save-analise': function (f) {
+      var id = cid(), cargoId = val(f, 'cargo_id'), an = load(id, 'analises', {}) || {};
+      an[cargoId] = {
+        objetivo: val(f, 'objetivo'),
+        responsabilidades: f.elements.responsabilidades.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+        requisitos: { escolaridade: val(f, 'escolaridade'), experiencia: val(f, 'experiencia'), tecnicas: val(f, 'tecnicas'), comportamentais: val(f, 'comportamentais') },
+        condicoes: val(f, 'condicoes')
+      };
+      save(id, 'analises', an); state.analiseCargoId = cargoId; renderModule(); toast('Ficha do cargo salva.');
+    },
+
+    'save-tabela-cfg': function (f) {
+      var tb = getTabela();
+      tb.nome = val(f, 'nome'); tb.vigencia = f.elements.vigencia.value; tb.observacao = val(f, 'observacao');
+      save(cid(), 'tabela', tb); toast('Parâmetros da tabela salvos.');
+    },
+
+    'save-faixa': function (f) {
+      var steps = [];
+      for (var i = 0; i < N_STEPS; i++) steps.push(Math.round(num(f.elements['step' + i].value) * 100) / 100);
+      if (steps.some(function (v) { return v <= 0; })) return toast('Informe o valor dos 5 steps (maior que zero).', true);
+      for (var j = 1; j < N_STEPS; j++) if (steps[j] < steps[j - 1]) return toast('Os steps devem ser crescentes: Step ' + STEP_LABELS[j] + ' está menor que o anterior.', true);
+      var tb = getTabela(), fid = val(f, 'faixa_id') || uid('fx');
+      var item = { id: fid, grau: val(f, 'grau'), descricao: val(f, 'descricao'), cargoId: f.elements.cargo_id.value, steps: steps };
+      var k = tb.faixas.findIndex(function (x) { return x.id === fid; });
+      if (k >= 0) tb.faixas[k] = item; else tb.faixas.push(item);
+      save(cid(), 'tabela', tb); closeModal(); renderModule();
+    },
+
+    'save-reajuste': function (f) {
+      var pct = parseFloat(f.elements.pct.value);
+      if (!isFinite(pct) || pct === 0 || pct <= -100 || pct > 1000) return toast('Informe um percentual válido e diferente de zero.', true);
+      var k = 1 + pct / 100, id = cid();
+      function r(v) { return Math.round(num(v) * k * 100) / 100; }
+      var tb = getTabela();
+      tb.faixas.forEach(function (x) { x.steps = x.steps.map(r); });
+      save(id, 'tabela', tb);
+      if (f.elements.cargos.checked) save(id, 'cargos', inCompany('cargos').map(function (c) { c.piso = r(c.piso); c.teto = r(c.teto); return c; }));
+      closeModal(); renderModule(); toast('Reajuste de ' + String(pct).replace('.', ',') + '% aplicado.');
+    },
+
+    'export-pdf': function (f) {
+      var tabs = TABS.map(function (t) { return t[0]; }).filter(function (t) {
+        var c = f.querySelector('input[name="tabs"][value="' + t + '"]'); return c && c.checked;
+      });
+      if (!tabs.length) return toast('Selecione ao menos uma guia para exportar.', true);
+      runPrint(tabs, { fotos: f.elements.fotos.checked, landscape: f.elements.orient.value === 'landscape' });
+    },
+
+    'save-func': function (f) {
+      var cargoId = f.elements.cargo_id.value;
+      var cargo = inCompany('cargos').filter(function (c) { return c.id === cargoId; })[0];
+      var foto = f.elements.foto.value;
+      upsert('funcionarios', {
+        id: val(f, 'func_id') || uid('fn'), nome: val(f, 'nome'), cpf: val(f, 'cpf'), cargoId: cargoId,
+        setor: val(f, 'setor') || (cargo ? cargo.setor : ''), admissao: f.elements.admissao.value, status: f.elements.status.value,
+        foto: isPhoto(foto) ? foto : '', faixaId: f.elements.faixa_id.value || '', step: f.elements.faixa_id.value ? (parseInt(f.elements.step.value, 10) || 0) : 0
+      });
+      closeModal(); renderModule();
+    },
+
+    'save-av': function (f) {
+      var av = { id: val(f, 'av_id') || uid('av'), funcionarioId: f.elements.funcionario_id.value, periodo: val(f, 'periodo'), data: f.elements.data.value, observacoes: val(f, 'observacoes') };
+      COMPETENCIAS.forEach(function (c) { av[c[0]] = clamp(num(f.elements['n_' + c[0]].value, 1), 1, 5); });
+      av.media = calcMedia(av); av.classificacao = conceito(av.media).texto;
+      upsert('avaliacoes', av); closeModal(); renderModule();
+    },
+
+    'save-fb': function (f) {
+      upsert('feedbacks', { id: val(f, 'fb_id') || uid('fb'), funcionarioId: f.elements.funcionario_id.value, data: f.elements.data.value, tipo: f.elements.tipo.value, autor: val(f, 'autor'), descricao: val(f, 'descricao') });
+      closeModal(); renderModule();
+    },
+
+    'save-pol': function (f) {
+      upsert('politicas', { id: val(f, 'pol_id') || uid('pol'), titulo: val(f, 'titulo'), categoria: f.elements.categoria.value, conteudo: val(f, 'conteudo') });
+      closeModal(); renderModule();
+    }
+  };
+
+  /* =========================================================
+     FOTO DO COLABORADOR
+     ========================================================= */
+  function processPhoto(file, cb) {
+    if (!/^image\//.test(file.type)) return cb(new Error('Selecione um arquivo de imagem (JPG, PNG ou WebP).'));
+    if (file.size > 12 * 1024 * 1024) return cb(new Error('Imagem muito grande (limite de 12 MB).'));
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      try {
+        var S = 240, c = document.createElement('canvas');
+        c.width = S; c.height = S;
+        var ctx = c.getContext('2d'), side = Math.min(img.naturalWidth, img.naturalHeight);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, S, S);
+        ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
+        cb(null, c.toDataURL('image/jpeg', 0.82));
+      } catch (e) { cb(new Error('Não foi possível processar a imagem.')); }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); cb(new Error('Não foi possível ler a imagem. Tente outro arquivo (JPG ou PNG).')); };
+    img.src = url;
+  }
+  function previewPhoto(form) {
+    var box = form.querySelector('[data-photo-preview]'), v = form.elements.foto.value;
+    if (box) box.innerHTML = isPhoto(v) ? '<img alt="Foto do colaborador" src="' + esc(v) + '">' : '<span>Sem foto</span>';
+  }
+  function setAllTabs(form, on) {
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="tabs"]'), function (c) { c.checked = on; });
+  }
+
+  /* =========================================================
+     EXPORTAÇÃO EM PDF (via impressão do navegador, sem bibliotecas)
+     ========================================================= */
+  function ptable(heads, rows, empty) {
+    if (!rows.length) return '<p class="ppara pmuted">' + esc(empty || 'Sem registros.') + '</p>';
+    return '<table class="ptbl"><thead><tr>' + heads.map(function (h) { return '<th' + (h[1] ? ' class="' + h[1] + '"' : '') + '>' + esc(h[0]) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr>' + r.map(function (c, i) { return '<td' + (heads[i][1] ? ' class="' + heads[i][1] + '"' : '') + '>' + c + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+  function pkv(rows) {
+    return '<table class="ptbl">' + rows.map(function (r) { return '<tr><td class="k">' + esc(r[0]) + '</td><td>' + r[1] + '</td></tr>'; }).join('') + '</table>';
+  }
+  function pcargoMap() { var m = {}; inCompany('cargos').forEach(function (c) { m[c.id] = c.nome; }); return m; }
+  function pfuncMap() { var m = {}; inCompany('funcionarios').forEach(function (c) { m[c.id] = c.nome; }); return m; }
+
+  var PRINT = {
+    dashboard: function () {
+      var funcs = inCompany('funcionarios'), avs = inCompany('avaliacoes'), tab = getTabela();
+      var ativos = funcs.filter(function (f) { return f.status === 'Ativo'; });
+      var media = avs.length ? (avs.reduce(function (s, a) { return s + calcMedia(a); }, 0) / avs.length).toFixed(2).replace('.', ',') : '-';
+      var massa = ativos.reduce(function (t, f) { return t + (salarioDe(f, tab) || 0); }, 0);
+      return ptable([['Indicador'], ['Valor', 'num']], [
+        ['Cargos cadastrados', String(inCompany('cargos').length)],
+        ['Faixas salariais', String(tab.faixas.length)],
+        ['Colaboradores (total / ativos)', funcs.length + ' / ' + ativos.length],
+        ['Avaliações realizadas', String(avs.length)],
+        ['Feedbacks registrados', String(inCompany('feedbacks').length)],
+        ['Políticas normativas', String(inCompany('politicas').length)],
+        ['Média geral de desempenho', media + ' / 5,0'],
+        ['Massa salarial mensal (ativos enquadrados)', esc(money(massa))]
+      ]);
+    },
+    empresa: function () {
+      var c = load(cid(), 'empresa', {}) || {};
+      return pkv([
+        ['Razão social', esc(c.nome || '-')], ['CNPJ (fictício)', esc(c.cnpj || '-')], ['Segmento', esc(c.segmento || '-')],
+        ['Porte', esc(c.porte || '-')], ['Nº estimado de funcionários', esc(c.numFuncionariosEstimado ?? '-')],
+        ['Cidade / UF', esc(c.cidadeUf || '-')], ['Ano de fundação', esc(c.anoFundacao ?? '-')], ['Descrição', esc(c.descricao || '-')]
+      ]);
+    },
+    missao: function () {
+      var mv = load(cid(), 'missao', {}) || {}, v = arr(mv.valores);
+      return '<h3>Missão</h3><p class="ppara">' + esc(mv.missao || '-') + '</p><h3>Visão</h3><p class="ppara">' + esc(mv.visao || '-') + '</p>' +
+        '<h3>Valores</h3>' + (v.length ? '<ol class="ppara">' + v.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '<p class="ppara pmuted">Nenhum valor cadastrado.</p>');
+    },
+    cargos: function () {
+      return ptable([['Cargo'], ['Setor'], ['Nível'], ['CBO'], ['Piso', 'num'], ['Teto', 'num']],
+        inCompany('cargos').map(function (c) { return [esc(c.nome), esc(c.setor || '-'), esc(c.nivel || '-'), esc(c.cbo || '-'), esc(money(c.piso)), esc(money(c.teto))]; }),
+        'Nenhum cargo cadastrado.');
+    },
+    tabela: function () {
+      var tab = getTabela(), cm = pcargoMap(), funcs = inCompany('funcionarios');
+      var faixas = tab.faixas.slice().sort(function (a, b) { return a.steps[0] - b.steps[0]; });
+      var heads = [['Faixa'], ['Descrição / cargo']].concat(STEP_LABELS.map(function (l) { return ['Step ' + l, 'num']; })).concat([['Amplitude', 'num'], ['Colab.', 'ctr']]);
+      return pkv([['Tabela', esc(tab.nome || '-')], ['Vigência', esc(fmtVigencia(tab.vigencia))], ['Observações', esc(tab.observacao || '-')]]) +
+        ptable(heads, faixas.map(function (fx) {
+          return [esc(fx.grau), esc(fx.descricao || '-') + (fx.cargoId && cm[fx.cargoId] ? '<br><span class="pmuted">Cargo: ' + esc(cm[fx.cargoId]) + '</span>' : '')]
+            .concat(fx.steps.map(function (v) { return esc(money(v)); }))
+            .concat([esc(amplitude(fx)), String(funcs.filter(function (f) { return f.faixaId === fx.id; }).length)]);
+        }), 'Nenhuma faixa salarial cadastrada.');
+    },
+    analise: function () {
+      var cargos = inCompany('cargos'), an = load(cid(), 'analises', {}) || {};
+      if (!cargos.length) return '<p class="ppara pmuted">Nenhum cargo cadastrado.</p>';
+      return cargos.map(function (c) {
+        var a = an[c.id], r = (a && a.requisitos) || {};
+        if (!a || !a.objetivo) return '<div class="pblock"><h3>' + esc(c.nome) + ' <span class="pmuted">(' + esc(c.setor) + ' — ' + esc(c.nivel) + ')</span></h3><p class="ppara pmuted">Ficha ainda não preenchida.</p></div>';
+        return '<div class="pblock"><h3>' + esc(c.nome) + ' <span class="pmuted">(' + esc(c.setor) + ' — ' + esc(c.nivel) + ')</span></h3>' +
+          '<p class="ppara"><strong>Objetivo:</strong> ' + esc(a.objetivo) + '</p>' +
+          (arr(a.responsabilidades).length ? '<strong>Responsabilidades:</strong><ul>' + arr(a.responsabilidades).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+          pkv([['Escolaridade', esc(r.escolaridade || '-')], ['Experiência', esc(r.experiencia || '-')], ['Competências técnicas', esc(r.tecnicas || '-')],
+            ['Competências comportamentais', esc(r.comportamentais || '-')], ['Condições de trabalho', esc(a.condicoes || '-')]]) + '</div>';
+      }).join('');
+    },
+    funcionarios: function (o) {
+      var cm = pcargoMap(), tab = getTabela();
+      var heads = (o.fotos ? [['Foto']] : []).concat([['Nome'], ['CPF'], ['Cargo'], ['Setor'], ['Admissão'], ['Faixa / Step'], ['Salário', 'num'], ['Status']]);
+      var list = inCompany('funcionarios').slice().sort(function (a, b) { return str(a.nome).localeCompare(str(b.nome), 'pt-BR'); });
+      return ptable(heads, list.map(function (f) {
+        var sal = salarioDe(f, tab);
+        return (o.fotos ? [isPhoto(f.foto) ? '<img class="pimg" src="' + esc(f.foto) + '" alt="">' : '<span class="pmuted">' + esc(iniciais(f.nome)) + '</span>'] : [])
+          .concat([esc(f.nome), esc(f.cpf || '-'), esc(cm[f.cargoId] || 'Cargo não localizado'), esc(f.setor || '-'), fmtDate(f.admissao),
+            esc(enquadramento(f, tab) || '-'), sal ? esc(money(sal)) : '-', esc(f.status || 'Ativo')]);
+      }), 'Nenhum colaborador registrado.');
+    },
+    avaliacao: function () {
+      var fm = pfuncMap();
+      var heads = [['Colaborador'], ['Ciclo'], ['Data']].concat(COMPETENCIAS.map(function (c) { return [c[2], 'ctr']; })).concat([['Média', 'ctr'], ['Conceito'], ['Parecer']]);
+      return ptable(heads, inCompany('avaliacoes').map(function (a) {
+        var m = calcMedia(a);
+        return [esc(fm[a.funcionarioId] || 'Não identificado'), esc(a.periodo || '-'), fmtDate(a.data)]
+          .concat(COMPETENCIAS.map(function (c) { return esc(clamp(num(a[c[0]], 1), 1, 5)); }))
+          .concat([m.toFixed(2).replace('.', ','), esc(conceito(m).texto), esc(a.observacoes || '')]);
+      }), 'Nenhuma avaliação lançada.');
+    },
+    feedbacks: function () {
+      var fm = pfuncMap();
+      var list = inCompany('feedbacks').slice().sort(function (a, b) { return str(b.data).localeCompare(str(a.data)); });
+      return ptable([['Data'], ['Colaborador'], ['Tipo'], ['Emissor'], ['Descrição']], list.map(function (b) {
+        return [fmtDate(b.data), esc(fm[b.funcionarioId] || 'Não identificado'), esc(b.tipo), esc(b.autor || '-'), esc(b.descricao || '')];
+      }), 'Nenhum feedback registrado.');
+    },
+    politicas: function () {
+      var l = inCompany('politicas');
+      if (!l.length) return '<p class="ppara pmuted">Nenhuma política cadastrada.</p>';
+      return l.map(function (p) {
+        return '<div class="pblock"><h3>' + esc(p.titulo) + ' <span class="pmuted">(' + esc(p.categoria || 'Geral') + ')</span></h3><p class="ppara">' + esc(p.conteudo) + '</p></div>';
+      }).join('');
+    }
+  };
+
+  function buildPrintDoc(tabs, opts) {
+    var emp = load(cid(), 'empresa', {}) || {}, now = new Date();
+    var stamp = now.toLocaleDateString('pt-BR') + ' ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return '<div class="pdoc"><header class="pdoc-head"><div class="pdoc-brand">Plataforma Maker · Simulação de Gestão de RH</div><h1>' + esc(emp.nome || 'Empresa') + '</h1>' +
+      '<div class="pdoc-meta">Emitido em ' + stamp + ' · ' + tabs.length + ' guia(s) selecionada(s)</div></header>' +
+      tabs.map(function (t) { return '<section class="psec"><h2>' + esc(tabInfo(t)[3]) + '</h2>' + PRINT[t]({ fotos: opts.fotos }) + '</section>'; }).join('') + '</div>';
+  }
+
+  function runPrint(tabs, opts) {
+    closeModal();
+    var root = document.getElementById('print-root');
+    root.innerHTML = buildPrintDoc(tabs, opts);
+    var st = document.getElementById('page-style');
+    if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }
+    st.textContent = '@page { size: A4 ' + (opts.landscape ? 'landscape' : 'portrait') + '; margin: 12mm; }';
+    document.body.classList.add('printing-export');
+    var done = false;
+    function cleanup() {
+      if (done) return; done = true;
+      document.body.classList.remove('printing-export'); root.innerHTML = '';
+      window.removeEventListener('afterprint', cleanup); document.removeEventListener('mousedown', cleanup, true);
+    }
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(function () { document.addEventListener('mousedown', cleanup, true); }, 600);
+    setTimeout(function () { try { window.print(); } catch (e) { cleanup(); toast('Seu navegador bloqueou a impressão.', true); } }, 150);
+  }
+
+  /* =========================================================
+     BACKUP (exportar / importar)
+     ========================================================= */
+  function exportCompany() {
+    var id = cid(), emp = load(id, 'empresa', {}) || {};
+    var bundle = { version: '4.0', exportedAt: new Date().toISOString(), id: id, auth: load(id, 'auth', null), empresa: emp };
+    ['missao', 'cargos', 'analises', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas', 'tabela'].forEach(function (k) {
+      bundle[k] = load(id, k, k === 'analises' || k === 'missao' || k === 'tabela' ? {} : []);
+    });
+    var blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'backup_' + slug(emp.nome) + '_' + todayISO() + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    toast('Backup exportado.');
+  }
+
+  function objs(v) { return arr(v).filter(function (x) { return x && typeof x === 'object'; }); }
+  function str(v) { return v === null || v === undefined ? '' : String(v); }
+
+  function importBundle(p) {
+    if (!p || typeof p !== 'object' || !p.empresa || typeof p.empresa !== 'object' || !str(p.empresa.nome).trim()) {
+      throw new Error('arquivo de backup inválido.');
+    }
+    var id = uid('emp');
+    var nome = str(p.empresa.nome).trim() + ' (Importada)';
+    var emp = {
+      id: id, nome: nome, cnpj: str(p.empresa.cnpj), segmento: str(p.empresa.segmento) || 'Geral', porte: str(p.empresa.porte) || 'Média',
+      numFuncionariosEstimado: parseInt(p.empresa.numFuncionariosEstimado, 10) || 0, cidadeUf: str(p.empresa.cidadeUf),
+      anoFundacao: parseInt(p.empresa.anoFundacao, 10) || 2020, descricao: str(p.empresa.descricao)
+    };
+    var idx = getIndex();
+    idx.push({ id: id, nome: nome, segmento: emp.segmento, porte: emp.porte, criadoEm: new Date().toLocaleDateString('pt-BR') });
+    setIndex(idx);
+    save(id, 'empresa', emp);
+
+    var mv = p.missao && typeof p.missao === 'object' ? p.missao : {};
+    save(id, 'missao', { missao: str(mv.missao), visao: str(mv.visao), valores: arr(mv.valores).map(str).filter(Boolean) });
+
+    save(id, 'cargos', objs(p.cargos).map(function (c) {
+      return { id: str(c.id) || uid('cg'), nome: str(c.nome), setor: str(c.setor), nivel: str(c.nivel) || 'Operacional', cbo: str(c.cbo), piso: num(c.piso), teto: num(c.teto) };
+    }));
+    var an = {};
+    if (p.analises && typeof p.analises === 'object' && !Array.isArray(p.analises)) {
+      Object.keys(p.analises).forEach(function (k) {
+        var a = p.analises[k]; if (!a || typeof a !== 'object') return;
+        var r = a.requisitos && typeof a.requisitos === 'object' ? a.requisitos : {};
+        an[k] = { objetivo: str(a.objetivo), responsabilidades: arr(a.responsabilidades).map(str).filter(Boolean),
+          requisitos: { escolaridade: str(r.escolaridade), experiencia: str(r.experiencia), tecnicas: str(r.tecnicas), comportamentais: str(r.comportamentais) }, condicoes: str(a.condicoes) };
+      });
+    }
+    save(id, 'analises', an);
+    save(id, 'funcionarios', objs(p.funcionarios).map(function (f) {
+      return { id: str(f.id) || uid('fn'), nome: str(f.nome), cpf: str(f.cpf), cargoId: str(f.cargoId), setor: str(f.setor), admissao: str(f.admissao), status: str(f.status) || 'Ativo',
+        foto: isPhoto(f.foto) ? f.foto : '', faixaId: str(f.faixaId), step: clamp(parseInt(f.step, 10) || 0, 0, N_STEPS - 1) };
+    }));
+    save(id, 'avaliacoes', objs(p.avaliacoes).map(function (a) {
+      var o = { id: str(a.id) || uid('av'), funcionarioId: str(a.funcionarioId), periodo: str(a.periodo), data: str(a.data), observacoes: str(a.observacoes) };
+      COMPETENCIAS.forEach(function (c) { o[c[0]] = clamp(num(a[c[0]], 1), 1, 5); });
+      o.media = calcMedia(o); o.classificacao = conceito(o.media).texto; return o;
+    }));
+    save(id, 'feedbacks', objs(p.feedbacks).map(function (b) {
+      return { id: str(b.id) || uid('fb'), funcionarioId: str(b.funcionarioId), data: str(b.data), tipo: str(b.tipo) || 'Positivo', autor: str(b.autor), descricao: str(b.descricao) };
+    }));
+    save(id, 'politicas', objs(p.politicas).map(function (x) {
+      return { id: str(x.id) || uid('pol'), titulo: str(x.titulo), categoria: str(x.categoria) || 'Geral', conteudo: str(x.conteudo) };
+    }));
+    save(id, 'tabela', normTabela(p.tabela));
+    if (p.auth && typeof p.auth.hash === 'string' && typeof p.auth.salt === 'string') save(id, 'auth', { salt: p.auth.salt, hash: p.auth.hash });
+    return { id: id, hasAuth: !!(p.auth && p.auth.hash) };
+  }
+
+  /* =========================================================
+     EVENTOS (delegação — sem handlers inline)
+     ========================================================= */
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-action]');
+    if (!el) return;
+    var fn = actions[el.dataset.action];
+    if (fn) { e.preventDefault(); try { fn(el, e); } catch (err) { console.error(err); toast('Erro: ' + err.message, true); } }
+  });
+
+  document.addEventListener('submit', function (e) {
+    var f = e.target.closest('form[data-submit]');
+    if (!f) return;
+    e.preventDefault();
+    var fn = submits[f.dataset.submit];
+    if (!fn) return;
+    var btn = f.querySelector('button[type=submit]');
+    if (btn) btn.disabled = true;
+    Promise.resolve().then(function () { return fn(f, e); }).catch(function (err) {
+      console.error(err); toast('Erro: ' + err.message, true);
+    }).then(function () { if (btn && btn.isConnected) btn.disabled = false; });
+  });
+
+  function onFilter(e) {
+    var el = e.target.closest ? e.target.closest('[data-filter]') : null;
+    if (!el) return;
+    var key = el.dataset.filter;
+    if (state.filters[key] === el.value) return;
+    state.filters[key] = el.value;
+    var pos = el.selectionStart;
+    renderModule();
+    var again = document.querySelector('[data-filter="' + key + '"]');
+    if (again) {
+      again.focus();
+      if (typeof pos === 'number' && again.setSelectionRange) { try { again.setSelectionRange(pos, pos); } catch (x) { /* ignore */ } }
+    }
+  }
+  document.addEventListener('input', onFilter);
+  document.addEventListener('change', onFilter);
+
+  document.addEventListener('input', function (e) {
+    if (e.target.matches && e.target.matches('[data-on="av-score"]')) updateAvg(e.target.form);
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.matches && t.matches('[data-on="cargo-select"]')) {
+      var opt = t.options[t.selectedIndex], setor = t.form.elements.setor;
+      if (opt && setor && !setor.value.trim()) setor.value = opt.dataset.setor || '';
+      var fx = t.form.elements.faixa_id;
+      if (fx && !fx.disabled && !fx.value && t.value) {
+        for (var i = 0; i < fx.options.length; i++) { if (fx.options[i].dataset.cargo === t.value) { fx.value = fx.options[i].value; break; } }
+      }
+    }
+    if (t.matches && t.matches('[data-on="foto-file"]')) {
+      var file = t.files && t.files[0], form = t.form;
+      t.value = '';
+      if (!file) return;
+      processPhoto(file, function (err, data) {
+        if (err) return toast(err.message, true);
+        form.elements.foto.value = data; previewPhoto(form);
+      });
+    }
+  });
+
+  document.addEventListener('mousedown', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-overlay')) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && state.modal) closeModal();
+  });
+
+  document.getElementById('import-file').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast('Arquivo muito grande (limite de 5 MB).', true);
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var res = importBundle(JSON.parse(reader.result));
+        state.companyId = null; state.tab = 'dashboard'; refresh();
+        openModal('login_company', { id: res.id });
+        toast(res.hasAuth ? 'Empresa importada. Use a senha original do backup para entrar.' : 'Empresa importada. Defina uma senha para entrar.');
+      } catch (err) { toast('Erro ao importar backup: ' + err.message, true); }
+    };
+    reader.onerror = function () { toast('Não foi possível ler o arquivo.', true); };
+    reader.readAsText(file);
+  });
+
+  /* =========================================================
+     INICIALIZAÇÃO
+     ========================================================= */
+  (async function init() {
+    renderApp();
+  })();
+})();
+</script>
+</body>
+</html>
