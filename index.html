@@ -257,6 +257,13 @@
   .check-list label:hover { background: #f4f6f8; }
   .check-inline { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; padding: 6px 0; }
   #print-root { display: none; }
+  .btn.sync { background: #262e38; border-color: #4b5563; color: #e5e7eb; }
+  .btn.sync:hover { background: #2f3a47; }
+  .btn.sync.ok { border-color: #10b981; color: #a7f3d0; }
+  .btn.sync.warn { border-color: #f59e0b; color: #fde68a; }
+  .btn.sync.bad { border-color: #ef4444; color: #fecaca; }
+  .cloud-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af; font-size: 11.5px; }
+  .cloud-banner.bad { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
   @media (max-width: 520px) {
     .gen-box { grid-template-columns: 1fr; }
     .steps-grid { grid-template-columns: 1fr 1fr; }
@@ -306,6 +313,13 @@
   'use strict';
 
   /* =========================================================
+     CONEXÃO COM O GOOGLE SHEETS
+     Cole entre as aspas o link do Apps Script (termina em /exec).
+     Vazio = a plataforma usa só o armazenamento deste navegador.
+     ========================================================= */
+  var CLOUD_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbwAfDE7SgXSR5qzktV3iAwUyq8iGGL2-akTALGlEd1JXehS102iL2XsWvOBgnDuGIRP/exec';
+
+  /* =========================================================
      ARMAZENAMENTO (localStorage com reserva em memória)
      As chaves são as mesmas da versão anterior, então os dados
      já salvos no navegador continuam funcionando.
@@ -313,10 +327,13 @@
   var KEY_MASTER = 'rh_app_master_auth';
   var KEY_INDEX = 'rh_app_companies_index';
   var KEY_SEEDED = 'rh_app_seeded';
-  var SUFFIXES = ['empresa', 'cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas', 'missao', 'auth', 'analises', 'tabela'];
+  var SUFFIXES = ['empresa', 'cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas', 'missao', 'auth', 'analises', 'tabela', 'sync'];
   var memory = {};
   var storageOk = true;
   var warned = false;
+  var session = { id: null };
+  var muteSync = false;
+  var KEY_CLOUD = 'rh_app_cloud_url';
 
   function rawGet(k) {
     try { var v = localStorage.getItem(k); return v === null ? (k in memory ? memory[k] : null) : v; }
@@ -340,7 +357,7 @@
 
   function ckey(id, s) { return 'rh_app_' + id + '_' + s; }
   function load(id, s, def) { return readJson(ckey(id, s), def); }
-  function save(id, s, v) { writeJson(ckey(id, s), v); }
+  function save(id, s, v) { writeJson(ckey(id, s), v); onLocalChange(id); }
   function getIndex() { var l = readJson(KEY_INDEX, []); return Array.isArray(l) ? l : []; }
   function setIndex(l) { writeJson(KEY_INDEX, l); }
   function wipeCompany(id) {
@@ -473,15 +490,23 @@
      TELAS
      ========================================================= */
   function viewSelect() {
-    var list = getIndex();
+    var list = mergedCompanies();
+    var cOn = cloudOn(), cs = state.cloud;
     var hasExample = list.some(function (c) { return c.exemplo; });
     var rows = list.map(function (c) {
+      var tag = '', hideRename = false;
+      if (cOn) {
+        if (c.cloud) { tag = '<span class="tag tag-blue">&#9729; Nuvem</span>'; hideRename = true; }
+        else if (c.nuvem && cs.listFailed) { tag = '<span class="tag tag-amber">&#9729; Nuvem (sem conexão)</span>'; hideRename = true; }
+        else if (c.nuvem && !cs.loading) tag = '<span class="tag tag-amber">Removida da nuvem</span>';
+        else if (!cs.loading) tag = '<span class="tag">Só neste navegador</span>';
+      }
       return '<div class="company-row">' +
-        '<div><div style="font-weight:700;font-size:12.5px;">' + esc(c.nome) + '</div>' +
+        '<div><div style="font-weight:700;font-size:12.5px;">' + esc(c.nome) + ' ' + tag + '</div>' +
         '<div class="muted" style="font-size:10.5px;margin-top:2px;">Segmento: ' + esc(c.segmento || 'Geral') + ' &bull; Porte: ' + esc(c.porte || 'Média') + ' &bull; Criada em: ' + esc(c.criadoEm || '-') + '</div></div>' +
         '<div class="company-actions">' +
         '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="login_company" data-id="' + esc(c.id) + '">Entrar</button>' +
-        '<button class="btn btn-sm" data-action="open-modal" data-modal="rename_company" data-id="' + esc(c.id) + '">Renomear</button>' +
+        (hideRename ? '' : '<button class="btn btn-sm" data-action="open-modal" data-modal="rename_company" data-id="' + esc(c.id) + '">Renomear</button>') +
         '<button class="btn btn-danger btn-sm" data-action="open-modal" data-modal="delete_company" data-id="' + esc(c.id) + '">Excluir</button>' +
         '</div></div>';
     }).join('');
@@ -490,7 +515,7 @@
       '<div class="select-head"><div><div style="font-weight:700;font-size:15px;letter-spacing:.4px;">PLATAFORMA MAKER</div>' +
       '<div style="font-size:11px;opacity:.85;">Simulação de Gestão de Recursos Humanos</div></div>' +
       '<button class="btn btn-sm" data-action="open-modal" data-modal="master_panel">&#9881; Área do Professor</button></div>' +
-      '<div class="select-body">' +
+      '<div class="select-body">' + cloudBanner() +
       '<div class="toolbar-group" style="justify-content:space-between;margin-bottom:12px;">' +
       '<div><h2 style="font-size:13px;font-weight:700;margin:0;text-transform:uppercase;">Qual empresa fictícia você vai gerenciar?</h2>' +
       '<span class="muted" style="font-size:11px;">Selecione o workspace da sua equipe para iniciar os trabalhos.</span></div>' +
@@ -498,7 +523,8 @@
       '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="create_company">+ Criar Nova Empresa</button>' +
       '<button class="btn btn-sm" data-action="import">&#128190; Importar Empresa</button></div></div>' +
       (list.length ? rows : '<div class="dashed"><strong style="display:block;margin-bottom:6px;color:#22262a;">Nenhuma empresa cadastrada ainda.</strong>Clique em "+ Criar Nova Empresa" para começar. Sugestão de roteiro: perfil da empresa &rarr; cargos &rarr; tabela salarial &rarr; colaboradores &rarr; avaliações e feedbacks.<br>Já tem um backup? Use "Importar Empresa".</div>') +
-      '<div class="notice"><strong>Ambiente de simulação didática:</strong> as informações ficam salvas apenas no armazenamento local deste navegador. Exporte um backup em JSON com frequência.' +
+      '<div class="notice"><strong>Ambiente de simulação didática:</strong> ' +
+      (cOn ? 'com a planilha conectada, as empresas ficam salvas na nuvem e este navegador guarda uma cópia para usar sem internet.' : 'as informações ficam salvas apenas no armazenamento local deste navegador. Exporte um backup em JSON com frequência.') +
       (storageOk ? '' : '<br><strong>Atenção:</strong> o navegador bloqueou o armazenamento local; os dados valem só enquanto esta aba estiver aberta.') + '</div>' +
       (hasExample ? '<div class="notice">A empresa de exemplo usa a senha inicial <strong>1234</strong>. Altere em <em>Segurança</em> depois de entrar.</div>' : '') +
       '<div class="muted" style="margin-top:14px;text-align:right;font-size:10.5px;">Desenvolvido por: João Guilherme Batista</div>' +
@@ -514,6 +540,7 @@
     return '<div class="erp">' +
       '<header class="topbar"><div class="brand"><i>&#9632;</i> PLATAFORMA MAKER <span class="brand-sub">RH ERP</span></div>' +
       '<div class="top-actions"><span class="top-company">Empresa: <strong>' + esc(comp.nome) + '</strong></span>' +
+      syncButton() +
       '<button class="btn btn-sm" data-action="export" title="Baixar backup completo em JSON">Exportar Backup</button>' +
       '<button class="btn btn-sm" data-action="import" title="Importar um arquivo JSON">Importar</button>' +
       '<button class="btn btn-sm" data-action="open-modal" data-modal="change_pass_inside">Segurança</button>' +
@@ -912,7 +939,7 @@
       (opts.min ? 'minlength="4" ' : '') + (opts.auto ? 'autocomplete="' + opts.auto + '" ' : '') + (opts.focus ? 'data-autofocus ' : '') + '></div>';
   }
   function companyName(id) {
-    var c = getIndex().filter(function (x) { return x.id === id; })[0];
+    var c = mergedCompanies().filter(function (x) { return x.id === id; })[0];
     return c ? c.nome : '';
   }
 
@@ -921,7 +948,7 @@
     var m = state.modal, d = state.modalData || {}, id = cid();
 
     if (m === 'login_company') {
-      var hasAuth = !!load(d.id, 'auth', null);
+      var hasAuth = !!load(d.id, 'auth', null) || !!cloudEntry(d.id);
       return formModal(hasAuth ? 'Acesso seguro da empresa' : 'Definir senha da empresa', 'login',
         '<input type="hidden" name="id" value="' + esc(d.id) + '"><div style="font-size:12px;margin-bottom:12px;">Empresa: <strong>' + esc(companyName(d.id)) + '</strong></div>' +
         (hasAuth ? pwField('Senha de acesso do grupo', 'pass', { focus: 1, auto: 'current-password' }) :
@@ -951,7 +978,7 @@
     }
 
     if (m === 'delete_company') {
-      var hasA = !!load(d.id, 'auth', null);
+      var hasA = !!load(d.id, 'auth', null) || !!cloudEntry(d.id);
       return formModal('Excluir empresa', 'delete-company',
         '<input type="hidden" name="id" value="' + esc(d.id) + '">' +
         '<div class="notice danger" style="margin:0 0 10px;">Todos os cargos, colaboradores, avaliações, feedbacks e políticas de <strong>' + esc(companyName(d.id)) + '</strong> serão apagados em definitivo. Exporte um backup antes, se precisar.</div>' +
@@ -960,23 +987,33 @@
     }
 
     if (m === 'master_panel') {
-      var master = getMaster(), companies = getIndex();
-      var body;
-      if (!master) {
-        return formModal('Painel do administrador / professor', 'master-setup',
-          '<div class="notice warn" style="margin:0 0 12px;"><strong>Primeiro acesso:</strong> ainda não há senha mestre neste navegador. Cadastre uma para poder redefinir o acesso dos grupos.</div>' +
-          '<div class="row c2">' + pwField('Definir senha mestre (mín. 4 caracteres)', 'mpass', { min: 1, focus: 1, auto: 'new-password' }) + pwField('Confirmar senha mestre', 'mpass2', { min: 1, auto: 'new-password' }) + '</div>',
-          'Cadastrar senha mestre', 'lg', '<button type="button" class="btn" data-action="close-modal">Fechar</button>');
+      var cl = cloudOn();
+      var mi = cl ? state.cloud.master : { has: !!getMaster() };
+      var companies = mergedCompanies();
+      var cfgBtn = '<button type="button" class="btn" data-action="open-modal" data-modal="cloud_cfg">&#9729; Planilha (Google Sheets)</button>';
+      var closeBtn = '<button type="button" class="btn" data-action="close-modal">Fechar</button>';
+      if (cl && mi === undefined) {
+        return modalShell('Painel do administrador / professor', '<div class="modal-body"><p class="muted">Consultando a planilha...</p></div><div class="modal-foot">' + closeBtn + '</div>', '', 'lg');
       }
-      body = '<div class="modal-body"><div class="toolbar-group" style="justify-content:space-between;margin-bottom:10px;"><div class="toolbar-title">Empresas registradas neste navegador</div>' +
+      if (cl && mi === null) {
+        return modalShell('Painel do administrador / professor', '<div class="modal-body"><div class="notice danger" style="margin:0;">Não foi possível falar com a planilha agora. Verifique a internet e a implantação do Apps Script (acesso "Qualquer pessoa").</div></div>' +
+          '<div class="modal-foot">' + cfgBtn + '<button type="button" class="btn" data-action="open-modal" data-modal="master_panel">Tentar de novo</button>' + closeBtn + '</div>', '', 'lg');
+      }
+      if (!mi.has) {
+        return formModal('Painel do administrador / professor', 'master-setup',
+          '<div class="notice warn" style="margin:0 0 12px;"><strong>Primeiro acesso:</strong> ainda não há senha mestre' + (cl ? ' na planilha' : ' neste navegador') + '. Cadastre uma para poder redefinir o acesso dos grupos.' + (cl ? ' Ela vale para todos os navegadores.' : '') + '</div>' +
+          '<div class="row c2">' + pwField('Definir senha mestre (mín. 4 caracteres)', 'mpass', { min: 1, focus: 1, auto: 'new-password' }) + pwField('Confirmar senha mestre', 'mpass2', { min: 1, auto: 'new-password' }) + '</div>',
+          'Cadastrar senha mestre', 'lg', cfgBtn + closeBtn);
+      }
+      return modalShell('Painel do administrador / professor',
+        '<div class="modal-body"><div class="toolbar-group" style="justify-content:space-between;margin-bottom:10px;"><div class="toolbar-title">Empresas ' + (cl ? 'na planilha e neste navegador' : 'registradas neste navegador') + '</div>' +
         '<button class="btn btn-sm" data-action="open-modal" data-modal="change_master_pass">Alterar senha mestre</button></div>' +
         '<div class="table-scroll"><table class="tbl" style="margin-bottom:12px;"><thead><tr><th>Empresa</th><th>Criação</th><th class="num">Recuperação</th></tr></thead><tbody>' +
         (companies.length ? companies.map(function (c) {
           return '<tr><td><strong>' + esc(c.nome) + '</strong></td><td>' + esc(c.criadoEm || '-') + '</td><td class="acts"><button class="btn btn-sm" data-action="open-modal" data-modal="reset_company_access" data-id="' + esc(c.id) + '">Redefinir acesso</button></td></tr>';
         }).join('') : '<tr><td colspan="3" class="empty">Nenhuma empresa cadastrada.</td></tr>') + '</tbody></table></div>' +
-        '<div class="notice">A senha mestre protege contra redefinição por colegas no mesmo navegador. Os dados continuam salvos no navegador, não em servidor.</div></div>' +
-        '<div class="modal-foot"><button type="button" class="btn" data-action="close-modal">Fechar</button></div>';
-      return modalShell('Painel do administrador / professor', body, '', 'lg');
+        '<div class="notice">' + (cl ? 'Planilha conectada. A senha mestre fica guardada (como hash) na planilha.' : 'Planilha não conectada: os dados ficam só neste navegador. Use o botão "Planilha (Google Sheets)" para conectar.') + '</div></div>' +
+        '<div class="modal-foot">' + cfgBtn + closeBtn + '</div>', '', 'lg');
     }
 
     if (m === 'change_master_pass') {
@@ -1042,6 +1079,36 @@
         'Gerar PDF', '');
     }
 
+    if (m === 'conflict') {
+      return modalShell('Conflito de versões',
+        '<div class="modal-body"><div class="notice danger" style="margin:0 0 10px;">Outra pessoa (ou outro navegador) salvou uma versão mais nova desta empresa na planilha. O que fazer com as suas alterações?</div>' +
+        '<div class="hint">&bull; <strong>Usar a versão da planilha</strong>: o que você mudou desde a última sincronização é descartado.<br>&bull; <strong>Sobrescrever</strong>: a sua versão passa a valer e o que a outra pessoa fez é perdido.<br>Na dúvida, baixe um backup antes.</div></div>' +
+        '<div class="modal-foot"><button type="button" class="btn" data-action="export">Baixar meu backup</button><button type="button" class="btn" data-action="conflict-pull">Usar a versão da planilha</button>' +
+        '<button type="button" class="btn btn-danger solid" data-action="conflict-force">Sobrescrever com a minha versão</button></div>', '', '');
+    }
+
+    if (m === 'resolve_login') {
+      return modalShell('Alterações não enviadas',
+        '<div class="modal-body"><div class="notice warn" style="margin:0 0 10px;">Este navegador tem alterações de <strong>' + esc(companyName(d.id)) + '</strong> que ainda não chegaram à planilha. Qual versão você quer usar?</div>' +
+        '<div class="hint">Se escolher a versão da planilha, as alterações pendentes deste navegador serão descartadas.</div></div>' +
+        '<div class="modal-foot"><button type="button" class="btn" data-action="login-use-remote">Usar a versão da planilha</button>' +
+        '<button type="button" class="btn btn-primary" data-action="login-keep-local">Manter e enviar as minhas alterações</button></div>', '', 'sm');
+    }
+
+    if (m === 'cloud_cfg') {
+      var fixed = !!CLOUD_URL_DEFAULT, curUrl = rawGet(KEY_CLOUD) || '';
+      if (fixed) {
+        return modalShell('Planilha (Google Sheets)',
+          '<div class="modal-body"><div class="notice" style="margin:0 0 10px;">A conexão está definida dentro do próprio arquivo (<code>CLOUD_URL_DEFAULT</code>) e vale para todos os navegadores.</div>' +
+          '<div class="hint" style="word-break:break-all;">' + esc(CLOUD_URL_DEFAULT) + '</div></div>' +
+          '<div class="modal-foot"><button type="button" class="btn" data-action="cloud-test">Testar conexão</button><button type="button" class="btn" data-action="open-modal" data-modal="master_panel">Voltar</button></div>', '', 'sm');
+      }
+      return formModal('Planilha (Google Sheets)', 'cloud-save',
+        '<div class="fg"><label class="fl">Link do Apps Script (termina em /exec)</label><input class="inp w100" name="url" data-autofocus value="' + esc(curUrl) + '" placeholder="https://script.google.com/macros/s/.../exec"></div>' +
+        '<div class="hint">Este campo vale só para este navegador. Para valer para todos, cole o link na linha <code>CLOUD_URL_DEFAULT</code> do arquivo HTML.</div>',
+        'Testar e salvar', 'sm', '<button type="button" class="btn btn-danger" data-action="cloud-remove">Desconectar</button><button type="button" class="btn" data-action="open-modal" data-modal="master_panel">Voltar</button>');
+    }
+
     if (m === 'valor_form') {
       return formModal('Novo valor corporativo', 'save-valor',
         '<div class="fg"><label class="fl">Princípio / valor</label><input class="inp w100" name="valor" required data-autofocus placeholder="Ex.: Ética e transparência"></div>', 'Adicionar', 'sm');
@@ -1082,7 +1149,7 @@
         '<div><div class="photo-actions"><label class="btn btn-sm" for="foto-file">Escolher foto</label>' +
         '<input type="file" id="foto-file" accept="image/*" class="hidden" data-on="foto-file">' +
         '<button type="button" class="btn btn-danger btn-sm" data-action="remove-photo">Remover foto</button></div>' +
-        '<div class="hint" style="margin-top:6px;">JPG, PNG ou WebP. A imagem é recortada em quadrado e reduzida (240 px) para ocupar pouco espaço no navegador.</div></div></div>' +
+        '<div class="hint" style="margin-top:6px;">JPG, PNG ou WebP. A imagem é recortada em quadrado e reduzida (200 px) para ocupar pouco espaço no navegador.</div></div></div>' +
         '<div class="fg"><label class="fl">Nome completo</label><input class="inp w100" name="nome" required data-autofocus value="' + esc(ef.nome || '') + '"></div>' +
         '<div class="row c2"><div class="fg"><label class="fl">CPF (fictício)</label><input class="inp w100" name="cpf" value="' + esc(ef.cpf || '') + '" placeholder="000.000.000-00"></div>' +
         '<div class="fg"><label class="fl">Data de admissão</label><input type="date" class="inp w100" name="admissao" required value="' + esc(ef.admissao || todayISO()) + '"></div></div>' +
@@ -1172,7 +1239,10 @@
   }
   function refresh() { renderApp(); renderModal(); }
 
-  function openModal(name, data) { state.modal = name; state.modalData = data || {}; renderModal(); }
+  function openModal(name, data) {
+    state.modal = name; state.modalData = data || {}; renderModal();
+    if (name === 'master_panel' && cloudOn()) loadMasterInfo();
+  }
   function closeModal() { state.modal = null; state.modalData = {}; renderModal(); }
   function askConfirm(opts) { openModal('confirm', opts); }
 
@@ -1194,7 +1264,58 @@
     'open-modal': function (el) { openModal(el.dataset.modal, el.dataset.id ? { id: el.dataset.id } : {}); },
     'close-modal': function () { closeModal(); },
     'set-tab': function (el) { state.tab = el.dataset.tab; resetFilters(); renderApp(); window.scrollTo(0, 0); },
-    'exit-company': function () { state.companyId = null; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters(); refresh(); },
+    'exit-company': async function () {
+      if (session.id && session.linked && session.dirty) {
+        toast('Enviando alterações pendentes...');
+        await pushNow(false);
+        if (session.status === 'conflict') return;
+        if (session.dirty) {
+          return askConfirm({
+            title: 'Alterações não enviadas', danger: true, label: 'Sair mesmo assim',
+            message: 'Algumas alterações ainda não chegaram à planilha. Elas ficam salvas neste navegador e serão oferecidas para envio no próximo acesso. Sair agora?',
+            run: function () { closeModal(); leaveCompany(); }
+          });
+        }
+      }
+      leaveCompany();
+    },
+    'sync-now': async function () {
+      var s = session;
+      if (!s.id) return;
+      if (!s.linked) return pushNow(false);
+      if (s.status === 'conflict') return openModal('conflict', {});
+      if (s.dirty) return pushNow(false);
+      if (s.newer) return pullNow();
+      await checkNewer();
+      if (session === s && s.newer) return pullNow();
+      if (session === s && s.status === 'saved') toast('Tudo sincronizado.');
+    },
+    'conflict-pull': function () { closeModal(); pullNow(); },
+    'conflict-force': function () { closeModal(); pushNow(true); },
+    'login-use-remote': function () {
+      var d = state.modalData;
+      muteSync = true;
+      try { applyRemote(d.id, d.r); } finally { muteSync = false; }
+      enterLinked(d.id, d.proofs, d.r.versao);
+    },
+    'login-keep-local': function () {
+      var d = state.modalData;
+      muteSync = true;
+      try { if (d.r.bundle && d.r.bundle.auth) save(d.id, 'auth', d.r.bundle.auth); } finally { muteSync = false; }
+      enterLinked(d.id, d.proofs, d.r.versao, { dirty: true });
+    },
+    'cloud-refresh': function () { refreshCloudList(); },
+    'cloud-test': async function () {
+      var r = await cloudCall('ping', null, { timeout: 20000 });
+      if (r.ok) toast('Conectado à planilha "' + (r.planilha || '') + '".');
+      else toast('Não consegui conectar: ' + errMsg(r), true);
+    },
+    'cloud-remove': function () {
+      rawDel(KEY_CLOUD);
+      state.cloud = { list: [], listFailed: false, loading: false, master: undefined };
+      openModal('master_panel'); renderApp();
+      toast('Planilha desconectada deste navegador.');
+    },
     'toggle-didactic': function (el) {
       var box = document.getElementById(el.dataset.target);
       if (!box) return;
@@ -1318,6 +1439,8 @@
   var submits = {
     'login': async function (f) {
       var id = val(f, 'id'), pass = val(f, 'pass');
+      var entry = cloudEntry(id);
+      if (cloudOn() && (entry || (state.cloud.listFailed && isNuvemMeta(id)))) return cloudLogin(id, pass, entry);
       var auth = load(id, 'auth', null);
       if (auth) {
         if (!(await checkAuth(auth, pass))) { toast('Senha incorreta. Tente novamente.', true); f.elements.pass.select(); return; }
@@ -1326,8 +1449,7 @@
         if (pass !== val(f, 'pass2')) return toast('A confirmação de senha não confere.', true);
         save(id, 'auth', await makeAuth(pass));
       }
-      state.companyId = id; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters();
-      state.modal = null; refresh();
+      await beginSession(id, pass);
     },
 
     'create-company': async function (f) {
@@ -1348,8 +1470,9 @@
       save(id, 'missao', { missao: 'Prover produtos e serviços de excelência valorizando colaboradores e clientes.', visao: 'Ser referência ética no setor.', valores: ['Transparência', 'Respeito', 'Foco no Cliente'] });
       ['cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas'].forEach(function (k) { save(id, k, []); });
       save(id, 'analises', {});
-      state.companyId = id; state.tab = 'dashboard'; resetFilters(); state.modal = null; refresh();
+      await beginSession(id, p1);
       toast('Empresa "' + nome + '" criada. Acesso liberado.');
+      if (cloudOn()) pushNow(false);
     },
 
     'rename-company': function (f) {
@@ -1365,44 +1488,84 @@
     'delete-company': async function (f) {
       var id = val(f, 'id');
       if (f.elements.word.value.trim() !== 'EXCLUIR') return toast('Digite exatamente a palavra EXCLUIR.', true);
-      var auth = load(id, 'auth', null);
-      if (auth) {
-        var p = f.elements.pass.value;
-        var ok = (await checkAuth(auth, p)) || (getMaster() && (await checkMaster(p)));
-        if (!ok) return toast('Senha incorreta. Use a senha da empresa ou a senha mestre.', true);
+      var nome = companyName(id), entry = cloudEntry(id);
+      var pass = f.elements.pass ? f.elements.pass.value : '';
+      if (cloudOn() && entry) {
+        var proofs = await makeProofs(entry.salt, pass);
+        var mi = await fetchMasterInfo();
+        var mproofs = mi && mi.has ? await makeProofs(mi.salt, pass) : [];
+        var r = await cloudCall('delete', { id: id, proofs: proofs, masterProofs: mproofs });
+        if (!r.ok && r.error !== 'not_found') return toast(r.error === 'auth' ? 'Senha incorreta. Use a senha da empresa ou a senha mestre.' : 'Não foi possível excluir na planilha: ' + errMsg(r), true);
+      } else {
+        var auth = load(id, 'auth', null);
+        if (auth) {
+          var ok = (await checkAuth(auth, pass)) || (getMaster() && (await checkMaster(pass)));
+          if (!ok) return toast('Senha incorreta. Use a senha da empresa ou a senha mestre.', true);
+        }
       }
-      var nome = companyName(id);
       wipeCompany(id);
-      if (state.companyId === id) state.companyId = null;
-      closeModal(); renderApp(); toast('Empresa "' + nome + '" excluída.');
+      closeModal(); renderApp(); refreshCloudList(); toast('Empresa "' + nome + '" excluída.');
     },
 
     'master-setup': async function (f) {
       var p1 = f.elements.mpass.value, p2 = f.elements.mpass2.value;
       if (p1.length < 4) return toast('A senha mestre deve ter pelo menos 4 caracteres.', true);
       if (p1 !== p2) return toast('As senhas não conferem.', true);
-      writeJson(KEY_MASTER, await makeAuth(p1));
+      var auth = await makeAuth(p1);
+      if (cloudOn()) {
+        var r = await cloudCall('master_setup', { auth: auth });
+        if (!r.ok) return toast('Não foi possível criar a senha mestre: ' + errMsg(r), true);
+      } else writeJson(KEY_MASTER, auth);
       toast('Senha mestre definida.'); openModal('master_panel');
     },
 
     'master-change': async function (f) {
-      if (!(await checkMaster(f.elements.old_pass.value))) return toast('Senha mestre atual incorreta.', true);
       var p1 = f.elements.new_pass.value, p2 = f.elements.new_pass2.value;
       if (p1.length < 4) return toast('A nova senha deve ter no mínimo 4 caracteres.', true);
       if (p1 !== p2) return toast('A confirmação da nova senha não confere.', true);
-      writeJson(KEY_MASTER, await makeAuth(p1));
+      var na = await makeAuth(p1);
+      if (cloudOn()) {
+        var mi = state.cloud.master;
+        if (!mi || !mi.has) return toast('Abra o painel do professor de novo e tente outra vez.', true);
+        var r = await cloudCall('master_change', { proofs: await makeProofs(mi.salt, f.elements.old_pass.value), newAuth: na });
+        if (!r.ok) return toast(r.error === 'auth' ? 'Senha mestre atual incorreta.' : 'Não foi possível alterar: ' + errMsg(r), true);
+      } else {
+        if (!(await checkMaster(f.elements.old_pass.value))) return toast('Senha mestre atual incorreta.', true);
+        writeJson(KEY_MASTER, na);
+      }
       toast('Senha mestre alterada.'); openModal('master_panel');
     },
 
     'reset-access': async function (f) {
       var id = val(f, 'id');
       if (f.elements.word.value.trim() !== 'REDEFINIR') return toast('Digite exatamente a palavra REDEFINIR.', true);
-      if (!(await checkMaster(f.elements.master_pass.value))) return toast('Senha mestre incorreta. Acesso não autorizado.', true);
       var n1 = f.elements.new_pass.value, n2 = f.elements.new_pass2.value;
       if (n1.length < 4) return toast('A nova senha deve ter no mínimo 4 caracteres.', true);
       if (n1 !== n2) return toast('A confirmação da nova senha não confere.', true);
-      save(id, 'auth', await makeAuth(n1));
+      var na = await makeAuth(n1);
+      if (cloudOn() && cloudEntry(id)) {
+        var mi = state.cloud.master;
+        if (!mi || !mi.has) return toast('Abra o painel do professor de novo e tente outra vez.', true);
+        var r = await cloudCall('reset_access', { id: id, masterProofs: await makeProofs(mi.salt, f.elements.master_pass.value), newAuth: na });
+        if (!r.ok) return toast(r.error === 'auth' ? 'Senha mestre incorreta. Acesso não autorizado.' : 'Não foi possível redefinir: ' + errMsg(r), true);
+        if (load(id, 'auth', null)) { muteSync = true; try { save(id, 'auth', na); } finally { muteSync = false; } }
+        refreshCloudList();
+      } else {
+        if (!(await checkMaster(f.elements.master_pass.value))) return toast('Senha mestre incorreta. Acesso não autorizado.', true);
+        save(id, 'auth', na);
+      }
       toast('Acesso redefinido. A nova senha já vale, sem perda de dados.'); openModal('master_panel');
+    },
+
+    'cloud-save': async function (f) {
+      var url = val(f, 'url');
+      if (!URL_RE.test(url)) return toast('Link inválido. Ele deve começar com https://script.google.com/ e terminar com /exec.', true);
+      var r = await cloudCall('ping', null, { url: url, timeout: 20000 });
+      if (!r.ok) return toast('Não consegui conectar: ' + errMsg(r), true);
+      rawSet(KEY_CLOUD, url);
+      state.cloud = { list: [], listFailed: false, loading: false, master: undefined };
+      toast('Conectado à planilha "' + (r.planilha || '') + '".');
+      openModal('master_panel'); refreshCloudList();
     },
 
     'change-pass': async function (f) {
@@ -1411,7 +1574,10 @@
       var n1 = f.elements.n1.value, n2 = f.elements.n2.value;
       if (n1.length < 4) return toast('A nova senha precisa de pelo menos 4 caracteres.', true);
       if (n1 !== n2) return toast('A confirmação não confere.', true);
-      save(id, 'auth', await makeAuth(n1));
+      var na = await makeAuth(n1);
+      var np = await makeProofs(na.salt, n1);
+      if (session.linked) session.pending = np; else session.proofs = np;
+      save(id, 'auth', na);
       closeModal(); toast('Senha da empresa alterada.');
     },
 
@@ -1539,12 +1705,14 @@
     var url = URL.createObjectURL(file), img = new Image();
     img.onload = function () {
       try {
-        var S = 240, c = document.createElement('canvas');
+        var S = 200, c = document.createElement('canvas');
         c.width = S; c.height = S;
         var ctx = c.getContext('2d'), side = Math.min(img.naturalWidth, img.naturalHeight);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, S, S);
         ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, S, S);
-        cb(null, c.toDataURL('image/jpeg', 0.82));
+        var q = 0.72, out = c.toDataURL('image/jpeg', q);
+        while (out.length > 42000 && q > 0.3) { q -= 0.15; out = c.toDataURL('image/jpeg', q); }
+        cb(null, out);
       } catch (e) { cb(new Error('Não foi possível processar a imagem.')); }
       URL.revokeObjectURL(url);
     };
@@ -1699,14 +1867,301 @@
   }
 
   /* =========================================================
+     NUVEM: GOOGLE SHEETS (via Google Apps Script)
+     ========================================================= */
+  var URL_RE = /^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+\/|macros\/)s\/[\w-]+\/exec$/;
+  state.cloud = { list: [], listFailed: false, loading: false, master: undefined };
+
+  function cloudUrl() { return String(CLOUD_URL_DEFAULT || rawGet(KEY_CLOUD) || '').trim(); }
+  function cloudOn() { return URL_RE.test(cloudUrl()); }
+
+  async function cloudCall(action, payload, opts) {
+    opts = opts || {};
+    var url = opts.url || cloudUrl();
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, opts.timeout || 30000) : 0;
+    try {
+      var res;
+      if (payload) {
+        res = await fetch(url, {
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(Object.assign({ action: action }, payload)), signal: ctrl ? ctrl.signal : undefined
+        });
+      } else {
+        var q = '?action=' + encodeURIComponent(action);
+        Object.keys(opts.query || {}).forEach(function (k) { q += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(opts.query[k]); });
+        res = await fetch(url + q, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+      }
+      if (!res.ok) return { ok: false, error: 'http' };
+      var txt = await res.text();
+      try { return JSON.parse(txt); } catch (e) { return { ok: false, error: 'bad_response' }; }
+    } catch (e) {
+      return { ok: false, error: 'network' };
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  function errMsg(r) {
+    switch (r && r.error) {
+      case 'network': return 'sem conexão com a internet ou com a planilha.';
+      case 'bad_response': case 'http': return 'resposta inválida. Confira se a implantação do Apps Script está com acesso "Qualquer pessoa".';
+      case 'auth': return 'senha incorreta.';
+      case 'locked': return 'muitas tentativas erradas. Aguarde 10 minutos.';
+      case 'not_found': return 'empresa não encontrada na planilha.';
+      case 'exists': return 'já existe uma senha mestre na planilha.';
+      case 'no_master': return 'a senha mestre ainda não foi criada.';
+      case 'conflict': return 'existe uma versão mais nova na planilha.';
+      default: return (r && r.message) ? r.message : 'erro desconhecido (' + ((r && r.error) || '?') + ').';
+    }
+  }
+
+  async function makeProofs(salt, pass) {
+    var text = salt + '::' + pass, out = [], h = await sha256(text);
+    if (h) out.push(h);
+    out.push(djb2(text));
+    return out;
+  }
+
+  function cloudEntry(id) { return state.cloud.list.filter(function (c) { return c.id === id; })[0] || null; }
+  function isNuvemMeta(id) { var m = getIndex().filter(function (c) { return c.id === id; })[0]; return !!(m && m.nuvem); }
+  function markNuvem(id, on) {
+    var idx = getIndex(), it = idx.filter(function (c) { return c.id === id; })[0];
+    if (it && !!it.nuvem !== !!on) { it.nuvem = !!on; setIndex(idx); }
+  }
+  function mergedCompanies() {
+    var out = [], seen = {};
+    state.cloud.list.forEach(function (c) {
+      var loc = getIndex().filter(function (x) { return x.id === c.id; })[0] || {};
+      out.push({ id: c.id, nome: c.nome, segmento: c.segmento, porte: c.porte, criadoEm: c.criadoEm, cloud: true, nuvem: true, exemplo: loc.exemplo });
+      seen[c.id] = 1;
+    });
+    getIndex().forEach(function (c) { if (!seen[c.id]) out.push({ id: c.id, nome: c.nome, segmento: c.segmento, porte: c.porte, criadoEm: c.criadoEm, cloud: false, nuvem: !!c.nuvem, exemplo: c.exemplo }); });
+    return out;
+  }
+
+  function getSyncMeta(id) { return readJson(ckey(id, 'sync'), null); }
+  function setSyncMeta(id, m) { writeJson(ckey(id, 'sync'), m); }
+
+  async function refreshCloudList() {
+    if (!cloudOn()) return;
+    state.cloud.loading = true;
+    if (!state.companyId) renderApp();
+    var r = await cloudCall('list');
+    if (r.ok) { state.cloud.list = arr(r.empresas); state.cloud.listFailed = false; } else { state.cloud.listFailed = true; }
+    state.cloud.loading = false;
+    if (!state.companyId) renderApp();
+    if (state.modal === 'master_panel') renderModal();
+  }
+
+  async function fetchMasterInfo() {
+    var r = await cloudCall('master_status');
+    return r.ok ? { has: !!r.has, salt: r.salt || '' } : null;
+  }
+  async function loadMasterInfo() {
+    state.cloud.master = undefined;
+    if (state.modal === 'master_panel') renderModal();
+    state.cloud.master = await fetchMasterInfo();
+    if (state.modal === 'master_panel') renderModal();
+    refreshCloudList();
+  }
+
+  function cloudBanner() {
+    if (!cloudOn()) return '';
+    var c = state.cloud;
+    var msg = c.loading ? '&#9729; Consultando a planilha...' : c.listFailed ? '&#9888; Sem conexão com a planilha. Mostrando só as empresas deste navegador.' : '&#9729; Planilha conectada: as empresas ficam salvas na nuvem.';
+    return '<div class="cloud-banner' + (c.listFailed ? ' bad' : '') + '"><span>' + msg + '</span><button class="btn btn-sm" data-action="cloud-refresh">Atualizar lista</button></div>';
+  }
+
+  /* ---------- sessão e sincronização ---------- */
+  function newSession(id) {
+    clearTimeout(session.timer);
+    return { id: id, linked: false, proofs: [], pending: null, base: 0, dirty: false, busy: false, again: false, newer: false, status: 'local', timer: 0 };
+  }
+  var SYNC_UI = {
+    local: ['&#9729; Enviar para a planilha', 'warn'],
+    pending: ['&#9729; Alterações pendentes...', 'warn'],
+    saving: ['&#9729; Sincronizando...', ''],
+    saved: ['&#9729; Salvo na planilha', 'ok'],
+    newer: ['&#9729; Há versão mais nova: atualizar', 'warn'],
+    error: ['&#9888; Não sincronizado: tentar de novo', 'bad'],
+    offline: ['&#9888; Offline: só neste navegador', 'bad'],
+    conflict: ['&#9888; Conflito: resolver', 'bad']
+  };
+  function syncButton() {
+    if (!cloudOn() || !session.id) return '';
+    var u = SYNC_UI[session.status] || SYNC_UI.local;
+    return '<button class="btn btn-sm sync ' + u[1] + '" id="sync-ind" data-action="sync-now" title="Sincronização com o Google Sheets">' + u[0] + '</button>';
+  }
+  function setStatus(st) {
+    session.status = st;
+    var el = document.getElementById('sync-ind');
+    if (el) { var u = SYNC_UI[st] || SYNC_UI.local; el.className = 'btn btn-sm sync ' + u[1]; el.innerHTML = u[0]; }
+  }
+
+  function onLocalChange(id) {
+    if (muteSync || !session.id || session.id !== id || !session.linked || !cloudOn()) return;
+    session.dirty = true;
+    setSyncMeta(id, { base: session.base, dirty: true });
+    setStatus('pending');
+    scheduleSync(1500);
+  }
+  function scheduleSync(ms) {
+    clearTimeout(session.timer);
+    var s = session;
+    s.timer = setTimeout(function () { if (session === s) pushNow(false); }, ms);
+  }
+
+  async function pushNow(force) {
+    var s = session;
+    if (!s.id || !cloudOn()) return;
+    clearTimeout(s.timer);
+    if (s.busy) { s.again = true; return; }
+    s.busy = true; setStatus('saving');
+    var wasLinked = s.linked;
+    var r = await cloudCall('save', {
+      id: s.id, proofs: s.proofs, baseVersion: s.linked ? s.base : 0, force: !!force,
+      bundle: buildBundle(s.id, !s.linked || !!s.pending)
+    }, { timeout: 60000 });
+    s.busy = false;
+    if (session !== s) return;
+    if (r.ok) {
+      s.linked = true; s.base = r.versao; s.dirty = false; s.newer = false;
+      if (s.pending) { s.proofs = s.pending; s.pending = null; }
+      setSyncMeta(s.id, { base: s.base, dirty: false });
+      markNuvem(s.id, true);
+      setStatus('saved');
+      if (!wasLinked) { toast('Empresa enviada para a planilha.'); refreshCloudList(); }
+      if (r.avisos && r.avisos.length) toast(r.avisos[0], true);
+      if (s.again) { s.again = false; scheduleSync(300); }
+    } else if (r.error === 'conflict') {
+      setStatus('conflict');
+      if (!state.modal) openModal('conflict', {});
+    } else if (r.error === 'auth') {
+      setStatus('error');
+      toast('A senha desta empresa foi alterada na planilha. Saia e entre novamente.', true);
+    } else {
+      setStatus(s.linked ? 'error' : 'local');
+      toast('Não foi possível salvar na planilha: ' + errMsg(r), true);
+    }
+  }
+
+  function applyRemote(id, r) {
+    storeBundle(id, r.bundle, { nuvem: true });
+    setSyncMeta(id, { base: r.versao, dirty: false });
+  }
+
+  async function pullNow() {
+    var s = session;
+    if (!s.id || !s.linked || !cloudOn()) return;
+    setStatus('saving');
+    var r = await cloudCall('load', { id: s.id, proofs: s.proofs });
+    if (session !== s) return;
+    if (!r.ok) { setStatus('error'); return toast('Não foi possível atualizar: ' + errMsg(r), true); }
+    applyRemote(s.id, r);
+    s.base = r.versao; s.dirty = false; s.newer = false;
+    setStatus('saved');
+    renderApp();
+    toast('Dados atualizados com a versão da planilha.');
+  }
+
+  async function checkNewer() {
+    var s = session;
+    if (!s.id || !s.linked || s.busy || !cloudOn()) return;
+    var r = await cloudCall('version', null, { query: { id: s.id }, timeout: 15000 });
+    if (session !== s) return;
+    if (!r.ok) {
+      if (r.error === 'not_found') { s.linked = false; setStatus('local'); toast('Esta empresa foi removida da planilha. Os dados continuam neste navegador.', true); }
+      else if (!s.dirty) setStatus('offline');
+      return;
+    }
+    if (num(r.versao) > s.base) { s.newer = true; setStatus(s.dirty ? 'pending' : 'newer'); }
+    else if (!s.dirty && (s.status === 'offline' || s.status === 'error')) setStatus('saved');
+  }
+
+  function enterLinked(id, proofs, base, opts) {
+    opts = opts || {};
+    session = newSession(id);
+    session.linked = true; session.proofs = proofs; session.base = base || 0; session.dirty = !!opts.dirty;
+    session.status = opts.offline ? 'offline' : (session.dirty ? 'pending' : 'saved');
+    state.companyId = id; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters(); state.modal = null;
+    refresh();
+    if (session.dirty && !opts.offline) scheduleSync(500);
+  }
+
+  async function beginSession(id, pass) {
+    var auth = load(id, 'auth', null);
+    var proofs = auth ? await makeProofs(auth.salt, pass) : [];
+    session = newSession(id);
+    session.proofs = proofs;
+    state.companyId = id; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters(); state.modal = null;
+    refresh();
+  }
+
+  function leaveCompany() {
+    clearTimeout(session.timer);
+    session = { id: null };
+    state.companyId = null; state.tab = 'dashboard'; state.analiseCargoId = null; resetFilters();
+    refresh();
+    refreshCloudList();
+  }
+
+  async function cloudLogin(id, pass, entry) {
+    var localAuth = load(id, 'auth', null);
+    var salt = entry ? entry.salt : (localAuth ? localAuth.salt : '');
+    var proofs = salt ? await makeProofs(salt, pass) : [];
+    var r = await cloudCall('load', { id: id, proofs: proofs });
+    if (r.ok) {
+      var meta = getSyncMeta(id);
+      if (localAuth && meta && meta.dirty) return openModal('resolve_login', { id: id, r: r, proofs: proofs });
+      muteSync = true;
+      try { applyRemote(id, r); } finally { muteSync = false; }
+      return enterLinked(id, proofs, r.versao);
+    }
+    if (r.error === 'auth') return toast('Senha incorreta. Tente novamente.', true);
+    if (r.error === 'locked') return toast('Muitas tentativas erradas. Aguarde 10 minutos.', true);
+    if (r.error === 'not_found') { refreshCloudList(); return toast('Esta empresa não existe mais na planilha.', true); }
+    if (localAuth) {
+      if (!(await checkAuth(localAuth, pass))) return toast('Senha incorreta. Tente novamente.', true);
+      toast('Sem conexão com a planilha. Entrando com a cópia deste navegador.', true);
+      var m2 = getSyncMeta(id);
+      return enterLinked(id, await makeProofs(localAuth.salt, pass), m2 ? m2.base : 0, { offline: true, dirty: !!(m2 && m2.dirty) });
+    }
+    toast('Não foi possível acessar a planilha: ' + errMsg(r), true);
+  }
+
+  setInterval(function () {
+    if (!session.id || !session.linked || !cloudOn() || session.busy) return;
+    if (session.dirty) pushNow(false); else checkNewer();
+  }, 40000);
+  window.addEventListener('online', function () {
+    if (!session.id || !session.linked || !cloudOn()) return;
+    if (session.dirty) pushNow(false); else checkNewer();
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && session.id && session.linked && !session.dirty && cloudOn()) checkNewer();
+  });
+  window.addEventListener('beforeunload', function (e) {
+    if (session.id && session.linked && session.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
+  });
+
+  /* =========================================================
      BACKUP (exportar / importar)
      ========================================================= */
-  function exportCompany() {
-    var id = cid(), emp = load(id, 'empresa', {}) || {};
-    var bundle = { version: '4.0', exportedAt: new Date().toISOString(), id: id, auth: load(id, 'auth', null), empresa: emp };
+  function objs(v) { return arr(v).filter(function (x) { return x && typeof x === 'object'; }); }
+  function str(v) { return v === null || v === undefined ? '' : String(v); }
+
+  function buildBundle(id, withAuth) {
+    var meta = getIndex().filter(function (c) { return c.id === id; })[0] || {};
+    var b = { version: '4.0', id: id, empresa: load(id, 'empresa', {}) || {}, meta: { criadoEm: meta.criadoEm || '' } };
+    if (withAuth) b.auth = load(id, 'auth', null);
     ['missao', 'cargos', 'analises', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas', 'tabela'].forEach(function (k) {
-      bundle[k] = load(id, k, k === 'analises' || k === 'missao' || k === 'tabela' ? {} : []);
+      b[k] = load(id, k, k === 'analises' || k === 'missao' || k === 'tabela' ? {} : []);
     });
+    return b;
+  }
+
+  function exportCompany() {
+    var id = cid(), bundle = buildBundle(id, true), emp = bundle.empresa || {};
+    bundle.exportedAt = new Date().toISOString();
     var blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -1716,60 +2171,74 @@
     toast('Backup exportado.');
   }
 
-  function objs(v) { return arr(v).filter(function (x) { return x && typeof x === 'object'; }); }
-  function str(v) { return v === null || v === undefined ? '' : String(v); }
+  function validBundle(p) {
+    return !!(p && typeof p === 'object' && p.empresa && typeof p.empresa === 'object' && str(p.empresa.nome).trim());
+  }
+
+  // Grava no navegador (sanitizando) os dados de uma empresa vindos de um backup ou da planilha.
+  function storeBundle(id, p, o) {
+    o = o || {};
+    if (!validBundle(p)) throw new Error('arquivo de backup inválido.');
+    muteSync = true;
+    try {
+      var nome = o.nome || str(p.empresa.nome).trim();
+      var emp = {
+        id: id, nome: nome, cnpj: str(p.empresa.cnpj), segmento: str(p.empresa.segmento) || 'Geral', porte: str(p.empresa.porte) || 'Média',
+        numFuncionariosEstimado: parseInt(p.empresa.numFuncionariosEstimado, 10) || 0, cidadeUf: str(p.empresa.cidadeUf),
+        anoFundacao: parseInt(p.empresa.anoFundacao, 10) || 2020, descricao: str(p.empresa.descricao)
+      };
+      var idx = getIndex(), it = idx.filter(function (c) { return c.id === id; })[0];
+      var meta = {
+        id: id, nome: nome, segmento: emp.segmento, porte: emp.porte,
+        criadoEm: (it && it.criadoEm) || str(p.meta && p.meta.criadoEm) || new Date().toLocaleDateString('pt-BR'), nuvem: !!o.nuvem
+      };
+      if (it && it.exemplo) meta.exemplo = true;
+      if (it) idx[idx.indexOf(it)] = meta; else idx.push(meta);
+      setIndex(idx);
+      save(id, 'empresa', emp);
+
+      var mv = p.missao && typeof p.missao === 'object' ? p.missao : {};
+      save(id, 'missao', { missao: str(mv.missao), visao: str(mv.visao), valores: arr(mv.valores).map(str).filter(Boolean) });
+      save(id, 'cargos', objs(p.cargos).map(function (c) {
+        return { id: str(c.id) || uid('cg'), nome: str(c.nome), setor: str(c.setor), nivel: str(c.nivel) || 'Operacional', cbo: str(c.cbo), piso: num(c.piso), teto: num(c.teto) };
+      }));
+      var an = {};
+      if (p.analises && typeof p.analises === 'object' && !Array.isArray(p.analises)) {
+        Object.keys(p.analises).forEach(function (k) {
+          var a = p.analises[k]; if (!a || typeof a !== 'object') return;
+          var r = a.requisitos && typeof a.requisitos === 'object' ? a.requisitos : {};
+          an[k] = { objetivo: str(a.objetivo), responsabilidades: arr(a.responsabilidades).map(str).filter(Boolean),
+            requisitos: { escolaridade: str(r.escolaridade), experiencia: str(r.experiencia), tecnicas: str(r.tecnicas), comportamentais: str(r.comportamentais) }, condicoes: str(a.condicoes) };
+        });
+      }
+      save(id, 'analises', an);
+      save(id, 'funcionarios', objs(p.funcionarios).map(function (f) {
+        return { id: str(f.id) || uid('fn'), nome: str(f.nome), cpf: str(f.cpf), cargoId: str(f.cargoId), setor: str(f.setor), admissao: str(f.admissao), status: str(f.status) || 'Ativo',
+          foto: isPhoto(f.foto) ? f.foto : '', faixaId: str(f.faixaId), step: clamp(parseInt(f.step, 10) || 0, 0, N_STEPS - 1) };
+      }));
+      save(id, 'avaliacoes', objs(p.avaliacoes).map(function (a) {
+        var ob = { id: str(a.id) || uid('av'), funcionarioId: str(a.funcionarioId), periodo: str(a.periodo), data: str(a.data), observacoes: str(a.observacoes) };
+        COMPETENCIAS.forEach(function (c) { ob[c[0]] = clamp(num(a[c[0]], 1), 1, 5); });
+        ob.media = calcMedia(ob); ob.classificacao = conceito(ob.media).texto; return ob;
+      }));
+      save(id, 'feedbacks', objs(p.feedbacks).map(function (b) {
+        return { id: str(b.id) || uid('fb'), funcionarioId: str(b.funcionarioId), data: str(b.data), tipo: str(b.tipo) || 'Positivo', autor: str(b.autor), descricao: str(b.descricao) };
+      }));
+      save(id, 'politicas', objs(p.politicas).map(function (x) {
+        return { id: str(x.id) || uid('pol'), titulo: str(x.titulo), categoria: str(x.categoria) || 'Geral', conteudo: str(x.conteudo) };
+      }));
+      save(id, 'tabela', normTabela(p.tabela));
+      if (p.auth && typeof p.auth.hash === 'string' && typeof p.auth.salt === 'string') save(id, 'auth', { salt: p.auth.salt, hash: p.auth.hash });
+    } finally { muteSync = false; }
+  }
 
   function importBundle(p) {
-    if (!p || typeof p !== 'object' || !p.empresa || typeof p.empresa !== 'object' || !str(p.empresa.nome).trim()) {
-      throw new Error('arquivo de backup inválido.');
-    }
+    if (!validBundle(p)) throw new Error('arquivo de backup inválido.');
     var id = uid('emp');
-    var nome = str(p.empresa.nome).trim() + ' (Importada)';
-    var emp = {
-      id: id, nome: nome, cnpj: str(p.empresa.cnpj), segmento: str(p.empresa.segmento) || 'Geral', porte: str(p.empresa.porte) || 'Média',
-      numFuncionariosEstimado: parseInt(p.empresa.numFuncionariosEstimado, 10) || 0, cidadeUf: str(p.empresa.cidadeUf),
-      anoFundacao: parseInt(p.empresa.anoFundacao, 10) || 2020, descricao: str(p.empresa.descricao)
-    };
-    var idx = getIndex();
-    idx.push({ id: id, nome: nome, segmento: emp.segmento, porte: emp.porte, criadoEm: new Date().toLocaleDateString('pt-BR') });
-    setIndex(idx);
-    save(id, 'empresa', emp);
-
-    var mv = p.missao && typeof p.missao === 'object' ? p.missao : {};
-    save(id, 'missao', { missao: str(mv.missao), visao: str(mv.visao), valores: arr(mv.valores).map(str).filter(Boolean) });
-
-    save(id, 'cargos', objs(p.cargos).map(function (c) {
-      return { id: str(c.id) || uid('cg'), nome: str(c.nome), setor: str(c.setor), nivel: str(c.nivel) || 'Operacional', cbo: str(c.cbo), piso: num(c.piso), teto: num(c.teto) };
-    }));
-    var an = {};
-    if (p.analises && typeof p.analises === 'object' && !Array.isArray(p.analises)) {
-      Object.keys(p.analises).forEach(function (k) {
-        var a = p.analises[k]; if (!a || typeof a !== 'object') return;
-        var r = a.requisitos && typeof a.requisitos === 'object' ? a.requisitos : {};
-        an[k] = { objetivo: str(a.objetivo), responsabilidades: arr(a.responsabilidades).map(str).filter(Boolean),
-          requisitos: { escolaridade: str(r.escolaridade), experiencia: str(r.experiencia), tecnicas: str(r.tecnicas), comportamentais: str(r.comportamentais) }, condicoes: str(a.condicoes) };
-      });
-    }
-    save(id, 'analises', an);
-    save(id, 'funcionarios', objs(p.funcionarios).map(function (f) {
-      return { id: str(f.id) || uid('fn'), nome: str(f.nome), cpf: str(f.cpf), cargoId: str(f.cargoId), setor: str(f.setor), admissao: str(f.admissao), status: str(f.status) || 'Ativo',
-        foto: isPhoto(f.foto) ? f.foto : '', faixaId: str(f.faixaId), step: clamp(parseInt(f.step, 10) || 0, 0, N_STEPS - 1) };
-    }));
-    save(id, 'avaliacoes', objs(p.avaliacoes).map(function (a) {
-      var o = { id: str(a.id) || uid('av'), funcionarioId: str(a.funcionarioId), periodo: str(a.periodo), data: str(a.data), observacoes: str(a.observacoes) };
-      COMPETENCIAS.forEach(function (c) { o[c[0]] = clamp(num(a[c[0]], 1), 1, 5); });
-      o.media = calcMedia(o); o.classificacao = conceito(o.media).texto; return o;
-    }));
-    save(id, 'feedbacks', objs(p.feedbacks).map(function (b) {
-      return { id: str(b.id) || uid('fb'), funcionarioId: str(b.funcionarioId), data: str(b.data), tipo: str(b.tipo) || 'Positivo', autor: str(b.autor), descricao: str(b.descricao) };
-    }));
-    save(id, 'politicas', objs(p.politicas).map(function (x) {
-      return { id: str(x.id) || uid('pol'), titulo: str(x.titulo), categoria: str(x.categoria) || 'Geral', conteudo: str(x.conteudo) };
-    }));
-    save(id, 'tabela', normTabela(p.tabela));
-    if (p.auth && typeof p.auth.hash === 'string' && typeof p.auth.salt === 'string') save(id, 'auth', { salt: p.auth.salt, hash: p.auth.hash });
+    storeBundle(id, p, { nome: str(p.empresa.nome).trim() + ' (Importada)' });
     return { id: id, hasAuth: !!(p.auth && p.auth.hash) };
   }
+
 
   /* =========================================================
      EVENTOS (delegação — sem handlers inline)
@@ -1778,7 +2247,11 @@
     var el = e.target.closest('[data-action]');
     if (!el) return;
     var fn = actions[el.dataset.action];
-    if (fn) { e.preventDefault(); try { fn(el, e); } catch (err) { console.error(err); toast('Erro: ' + err.message, true); } }
+    if (fn) {
+      e.preventDefault();
+      try { Promise.resolve(fn(el, e)).catch(function (err) { console.error(err); toast('Erro: ' + err.message, true); }); }
+      catch (err) { console.error(err); toast('Erro: ' + err.message, true); }
+    }
   });
 
   document.addEventListener('submit', function (e) {
@@ -1865,6 +2338,7 @@
      ========================================================= */
   (async function init() {
     renderApp();
+    if (cloudOn()) refreshCloudList();
   })();
 })();
 </script>
