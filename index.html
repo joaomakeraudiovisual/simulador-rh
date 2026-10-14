@@ -304,6 +304,38 @@
   'use strict';
 
   /* =========================================================
+     INTEGRAÇÃO COM GOOGLE SHEETS
+     ========================================================= */
+  var GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgzX1fXjRhlMoGqVSXjTTASoH2S1rO62FTolzM9OG_ipMUrD6d2z4hBH6Di7wdIC6N/exec';
+
+  function syncToGoogleSheets(companyId) {
+    if (!GOOGLE_SCRIPT_URL || !companyId) return;
+    try {
+      var emp = load(companyId, 'empresa', {}) || {};
+      var bundle = {
+        id: companyId,
+        empresa: emp,
+        missao: load(companyId, 'missao', {}) || {},
+        cargos: load(companyId, 'cargos', []),
+        analises: load(companyId, 'analises', {}),
+        funcionarios: load(companyId, 'funcionarios', []),
+        avaliacoes: load(companyId, 'avaliacoes', []),
+        feedbacks: load(companyId, 'feedbacks', []),
+        politicas: load(companyId, 'politicas', []),
+        tabela: load(companyId, 'tabela', {})
+      };
+      fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bundle)
+      }).catch(function (err) { console.error('Erro de sincronização:', err); });
+    } catch (err) {
+      console.error('Erro na sincronização:', err);
+    }
+  }
+
+  /* =========================================================
      ARMAZENAMENTO
      ========================================================= */
   var KEY_MASTER = 'rh_app_master_auth';
@@ -492,7 +524,7 @@
       '<button class="btn btn-primary btn-sm" data-action="open-modal" data-modal="create_company">+ Criar Nova Empresa</button>' +
       '<button class="btn btn-sm" data-action="import">&#128190; Importar Empresa</button></div></div>' +
       (list.length ? rows : '<div class="dashed"><strong style="display:block;margin-bottom:6px;color:#22262a;">Nenhuma empresa cadastrada ainda.</strong>Clique em "+ Criar Nova Empresa" para começar.</div>') +
-      '<div class="notice"><strong>Ambiente de simulação didática:</strong> as informações ficam salvas apenas no armazenamento local deste navegador. Exporte um backup em JSON com frequência.</div>' +
+      '<div class="notice"><strong>Ambiente de simulação didática:</strong> as informações ficam salvas localmente e sincronizadas com o Google Sheets.</div>' +
       (hasExample ? '<div class="notice">A empresa de exemplo usa a senha inicial <strong>1234</strong>. Altere em <em>Segurança</em> depois de entrar.</div>' : '') +
       '</div></div></div>';
   }
@@ -856,7 +888,7 @@
 
     var selectedId = state.filters.colabView || fs[0].id;
     var func = fs.filter(function(f) { return f.id === selectedId; })[0] || fs[0];
-    state.filters.colabView = func.id; // garante atualização do state
+    state.filters.colabView = func.id;
 
     var cargos = arr(load(id, 'cargos', []));
     var my_cargo = cargos.filter(function(c) { return c.id === func.cargoId; })[0] || {};
@@ -1220,7 +1252,12 @@
       var v = arr(mv.valores)[i];
       askConfirm({
         title: 'Remover valor', label: 'Remover', danger: true, message: 'Remover o valor "' + v + '"?',
-        run: function () { mv.valores = arr(mv.valores).filter(function (_, k) { return k !== i; }); save(id, 'missao', mv); closeModal(); renderModule(); }
+        run: function () {
+          mv.valores = arr(mv.valores).filter(function (_, k) { return k !== i; });
+          save(id, 'missao', mv);
+          syncToGoogleSheets(id);
+          closeModal(); renderModule();
+        }
       });
     },
     'del-cargo': function (el) {
@@ -1240,6 +1277,7 @@
           save(id, 'cargos', inCompany('cargos').filter(function (c) { return c.id !== cId; }));
           var an = load(id, 'analises', {}) || {}; delete an[cId]; save(id, 'analises', an);
           if (state.analiseCargoId === cId) state.analiseCargoId = null;
+          syncToGoogleSheets(id);
           closeModal(); renderModule();
         }
       });
@@ -1256,6 +1294,7 @@
           save(id, 'funcionarios', inCompany('funcionarios').filter(function (x) { return x.id !== fId; }));
           save(id, 'avaliacoes', inCompany('avaliacoes').filter(function (x) { return x.funcionarioId !== fId; }));
           save(id, 'feedbacks', inCompany('feedbacks').filter(function (x) { return x.funcionarioId !== fId; }));
+          syncToGoogleSheets(id);
           closeModal(); renderModule();
         }
       });
@@ -1267,7 +1306,11 @@
   function delSimple(key, itemId, title, msg) {
     askConfirm({
       title: title, message: msg, danger: true, label: 'Excluir',
-      run: function () { save(cid(), key, inCompany(key).filter(function (x) { return x.id !== itemId; })); closeModal(); renderModule(); }
+      run: function () {
+        save(cid(), key, inCompany(key).filter(function (x) { return x.id !== itemId; }));
+        syncToGoogleSheets(cid());
+        closeModal(); renderModule();
+      }
     });
   }
 
@@ -1314,6 +1357,7 @@
       save(id, 'missao', { missao: 'Prover produtos e serviços de excelência valorizando colaboradores e clientes.', visao: 'Ser referência ética no setor.', valores: ['Transparência', 'Respeito', 'Foco no Cliente'] });
       ['cargos', 'funcionarios', 'avaliacoes', 'feedbacks', 'politicas'].forEach(function (k) { save(id, k, []); });
       save(id, 'analises', {});
+      syncToGoogleSheets(id);
       state.companyId = id; state.tab = 'dashboard'; resetFilters(); state.modal = null; refresh();
       toast('Empresa "' + nome + '" criada. Acesso liberado.');
     },
@@ -1325,6 +1369,7 @@
       if (it) it.nome = nome;
       setIndex(idx);
       var emp = load(id, 'empresa', {}) || {}; emp.nome = nome; save(id, 'empresa', emp);
+      syncToGoogleSheets(id);
       closeModal(); renderApp();
     },
 
@@ -1350,6 +1395,7 @@
       save(id, 'avaliacoes', []); save(id, 'feedbacks', []); save(id, 'politicas', []);
       save(id, 'tabela', {});
       state.analiseCargoId = null;
+      syncToGoogleSheets(id);
       closeModal(); renderApp(); toast('Dados operacionais da empresa foram limpos com sucesso.');
     },
 
@@ -1405,24 +1451,30 @@
       save(id, 'empresa', emp);
       var idx = getIndex(), it = idx.filter(function (c) { return c.id === id; })[0];
       if (it) { it.nome = emp.nome; it.segmento = emp.segmento; it.porte = emp.porte; setIndex(idx); }
+      syncToGoogleSheets(id);
       renderApp(); toast('Perfil da empresa atualizado.');
     },
 
     'save-missao': function (f) {
       var id = cid(), mv = load(id, 'missao', {}) || {};
       mv.missao = val(f, 'missao'); mv.visao = val(f, 'visao'); mv.valores = arr(mv.valores);
-      save(id, 'missao', mv); toast('Missão e visão atualizadas.');
+      save(id, 'missao', mv);
+      syncToGoogleSheets(id);
+      toast('Missão e visão atualizadas.');
     },
 
     'save-valor': function (f) {
       var id = cid(), mv = load(id, 'missao', {}) || {};
       mv.valores = arr(mv.valores); mv.valores.push(val(f, 'valor'));
-      save(id, 'missao', mv); closeModal(); renderModule();
+      save(id, 'missao', mv);
+      syncToGoogleSheets(id);
+      closeModal(); renderModule();
     },
 
     'save-cargo': function (f) {
       var sal = num(f.elements.salario.value);
       upsert('cargos', { id: val(f, 'cargo_id') || uid('cg'), nome: val(f, 'nome'), setor: val(f, 'setor'), nivel: f.elements.nivel.value, cbo: val(f, 'cbo'), salario: sal });
+      syncToGoogleSheets(cid());
       closeModal(); renderModule();
     },
 
@@ -1434,13 +1486,17 @@
         requisitos: { escolaridade: val(f, 'escolaridade'), experiencia: val(f, 'experiencia'), tecnicas: val(f, 'tecnicas'), comportamentais: val(f, 'comportamentais') },
         condicoes: val(f, 'condicoes')
       };
-      save(id, 'analises', an); state.analiseCargoId = cargoId; renderModule(); toast('Ficha do cargo salva.');
+      save(id, 'analises', an); state.analiseCargoId = cargoId;
+      syncToGoogleSheets(id);
+      renderModule(); toast('Ficha do cargo salva.');
     },
 
     'save-tabela-cfg': function (f) {
       var cfg = load(cid(), 'tabela', {}) || {};
       cfg.vigencia = val(f, 'vigencia'); cfg.observacao = val(f, 'observacao');
-      save(cid(), 'tabela', cfg); toast('Diretrizes salariais salvas.');
+      save(cid(), 'tabela', cfg);
+      syncToGoogleSheets(cid());
+      toast('Diretrizes salariais salvas.');
     },
 
     'save-reajuste': function (f) {
@@ -1452,6 +1508,7 @@
         return c;
       });
       save(id, 'cargos', cargos);
+      syncToGoogleSheets(id);
       closeModal(); renderModule(); toast('Reajuste de ' + String(pct).replace('.', ',') + '% aplicado em todos os cargos.');
     },
 
@@ -1472,6 +1529,7 @@
         setor: val(f, 'setor') || (cargo ? cargo.setor : ''), admissao: f.elements.admissao.value, status: f.elements.status.value,
         foto: isPhoto(foto) ? foto : ''
       });
+      syncToGoogleSheets(cid());
       closeModal(); renderModule();
     },
 
@@ -1479,16 +1537,20 @@
       var av = { id: val(f, 'av_id') || uid('av'), funcionarioId: f.elements.funcionario_id.value, periodo: val(f, 'periodo'), data: f.elements.data.value, observacoes: val(f, 'observacoes') };
       COMPETENCIAS.forEach(function (c) { av[c[0]] = clamp(num(f.elements['n_' + c[0]].value, 1), 1, 5); });
       av.media = calcMedia(av); av.classificacao = conceito(av.media).texto;
-      upsert('avaliacoes', av); closeModal(); renderModule();
+      upsert('avaliacoes', av);
+      syncToGoogleSheets(cid());
+      closeModal(); renderModule();
     },
 
     'save-fb': function (f) {
       upsert('feedbacks', { id: val(f, 'fb_id') || uid('fb'), funcionarioId: f.elements.funcionario_id.value, data: f.elements.data.value, tipo: val(f, 'tipo'), autor: val(f, 'autor'), descricao: val(f, 'descricao') });
+      syncToGoogleSheets(cid());
       closeModal(); renderModule();
     },
 
     'save-pol': function (f) {
       upsert('politicas', { id: val(f, 'pol_id') || uid('pol'), titulo: val(f, 'titulo'), categoria: f.elements.categoria.value, conteudo: val(f, 'conteudo') });
+      syncToGoogleSheets(cid());
       closeModal(); renderModule();
     }
   };
@@ -1666,7 +1728,7 @@
   }
 
   /* =========================================================
-     BACKUP
+     BACKUP E IMPORTAÇÃO
      ========================================================= */
   function exportCompany() {
     var id = cid(), emp = load(id, 'empresa', {}) || {};
@@ -1738,6 +1800,8 @@
     save(id, 'tabela', { vigencia: str(cfg.vigencia), observacao: str(cfg.observacao) });
     
     if (p.auth && typeof p.auth.hash === 'string' && typeof p.auth.salt === 'string') save(id, 'auth', { salt: p.auth.salt, hash: p.auth.hash });
+    
+    syncToGoogleSheets(id);
     return { id: id, hasAuth: !!(p.auth && p.auth.hash) };
   }
 
